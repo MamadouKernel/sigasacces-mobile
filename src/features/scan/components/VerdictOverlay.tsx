@@ -14,7 +14,6 @@ const BG: Record<string, string> = {
 
 const ICON: Record<string, string> = { ok: '✓', out: '⇥', no: '✕' };
 
-/** Verdict plein écran — auto-fermeture 6,5 s comme sur la maquette. */
 export function VerdictOverlay() {
   const verdict = useScanStore((s) => s.verdict);
   const closeVerdict = useScanStore((s) => s.closeVerdict);

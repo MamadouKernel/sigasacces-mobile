@@ -11,10 +11,6 @@ interface Props {
   onOpenList: () => void;
 }
 
-/**
- * En-tête du scanner. Seules les actions immédiates du poste restent visibles
- * (sens entrée/sortie, liste des attendus) — le reste est replié sous « ⋯ ».
- */
 export function AppHeader({ onOpenList }: Props) {
   const { agent, post, logout } = useAuthStore();
   const direction = useScanStore((s) => s.direction);

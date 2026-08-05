@@ -2,7 +2,7 @@ export type AccessMode = 'unique' | '30j';
 export type VisitStatus = 'valide' | 'consomme' | 'revoque';
 export type Direction = 'entree' | 'sortie';
 
-/** Codes de verdict alignés sur le backend .NET (`ScanResponseDto.VerdictCode`). */
+// Alignés sur ScanResponseDto.VerdictCode côté backend.
 export type VerdictCode =
   | 'GRANTED'
   | 'CHECKED_OUT'
@@ -16,10 +16,10 @@ export type VerdictCode =
   | 'DENIED_NonBusinessDay'
   | 'DENIED_Revoked'
   | 'DENIED_NoActiveEntry'
-  // Verdicts propres au mode dégradé : prononcés localement, jamais par le serveur.
+  // prononcés localement en mode dégradé, jamais par le serveur
   | 'DENIED_OfflineListExpired'
   | 'DENIED_NotInOfflineList'
-  // Défaut d'intégration ou serveur injoignable — n'est PAS un refus d'accès.
+  // incident technique, pas un refus d'accès
   | 'SERVER_UNREACHABLE'
   | 'SERVER_ERROR';
 
@@ -31,13 +31,12 @@ export interface Verdict {
   title: string;
   who: string;
   detail: string;
-  /** Raison courte affichée en badge mono (refus uniquement). */
   reason?: string;
   degraded: boolean;
   securityEvent: boolean;
 }
 
-/** Journal local du poste — trace d'écran, le journal probant vit côté serveur. */
+// Trace d'écran uniquement, le journal probant vit côté serveur.
 export interface JournalEntry {
   t: number;
   nom: string;
@@ -49,10 +48,6 @@ export interface JournalEntry {
   sec: boolean;
 }
 
-/**
- * Agent identifié par le serveur à la prise de poste. Le code PIN n'est jamais
- * conservé par l'app : il est transmis une fois puis oublié.
- */
 export interface Agent {
   matricule: string;
   nom?: string;
@@ -62,31 +57,24 @@ export interface Agent {
 export interface PostConfig {
   siteId: string;
   siteLabel: string;
-  /** Poste de contrôle choisi à l'ouverture — tracé dans le journal serveur. */
   checkpointId: string;
   checkpointLabel: string;
 }
 
-/**
- * Visite telle qu'elle figure dans la liste du jour signée. En mode dégradé,
- * l'app y ajoute l'état observé localement (entrées/sorties survenues pendant
- * la coupure) pour tenir le cycle entrée/sortie jusqu'à la resynchronisation.
- */
+// Visite de la liste du jour signée, complétée par l'état observé localement
+// pendant une coupure (cycle entrée/sortie tenu jusqu'à la resync).
 export interface OfflineVisit {
   visitId: string;
   nom: string;
   mode: AccessMode;
   statut: VisitStatus;
-  /** Bornes de validité calculées par le serveur (jamais par le client). */
   fenetreDebut?: number;
   fenetreFin?: number;
   present: boolean;
   entreeAt?: number;
-  /** Cycle entrée/sortie clos (mode unique). */
   exited?: boolean;
 }
 
-/** Scan validé pendant une coupure, en attente de confrontation au registre. */
 export interface PendingScan {
   visitId: string;
   signedQrPayload: string;

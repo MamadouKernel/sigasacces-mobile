@@ -20,14 +20,6 @@ import { colors, radius, spacing } from '@/theme/tokens';
 
 type Mode = 'qr' | 'manuel';
 
-/**
- * Première mise en service du terminal.
- *
- * L'Admin Sigasécurité provisionne le terminal puis génère un ticket QR
- * temporaire à usage unique. Le terminal génère alors sa propre paire de clés
- * ES256, en prouve la possession et reçoit son jeton d'appareil : à partir de
- * là il est lié à son site, et l'agent n'aura plus jamais de site à choisir.
- */
 export function EnrolementScreen() {
   const router = useRouter();
   const activate = useEnrollmentStore((s) => s.activate);
@@ -57,7 +49,7 @@ export function EnrolementScreen() {
   };
 
   const onQrScanned = ({ data }: { data: string }) => {
-    // Anti-rafale : la caméra émet en continu tant que le QR est dans le cadre.
+    // la caméra émet en continu tant que le QR est dans le cadre
     const now = Date.now();
     if (busy || now - lastScanAt.current < 2500) return;
     lastScanAt.current = now;

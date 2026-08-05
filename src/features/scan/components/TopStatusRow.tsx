@@ -6,7 +6,6 @@ import { useScanStore } from '@/features/scan/scan.store';
 import { fmt } from '@/lib/time';
 import { colors, font, spacing } from '@/theme/tokens';
 
-/** Ligne horloge + état réseau, comme la barre de statut de la maquette. */
 export function TopStatusRow() {
   const degraded = useScanStore((s) => s.degraded);
   const [clock, setClock] = useState(() => fmt(Date.now()));

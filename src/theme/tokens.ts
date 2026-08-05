@@ -1,6 +1,4 @@
-/**
- * Design tokens NOVACCÈS — repris de la maquette (écran téléphone agent).
- */
+// Couleurs reprises de la maquette (maquette_novacces.html, vue app agent).
 export const colors = {
   bg: '#101820',
   bgDeep: '#0B0F14',

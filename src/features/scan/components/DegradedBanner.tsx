@@ -4,11 +4,6 @@ import { StyleSheet, Text, View } from 'react-native';
 import { ttlLabel, useScanStore } from '@/features/scan/scan.store';
 import { colors, font, spacing } from '@/theme/tokens';
 
-/**
- * Bandeau du mode dégradé. Il affiche l'échéance du TTL car passé ce délai
- * plus aucune validation hors ligne n'est possible (REQ-SEC-06) : l'agent doit
- * pouvoir anticiper, pas le découvrir au moment d'un refus.
- */
 export function DegradedBanner() {
   const degraded = useScanStore((s) => s.degraded);
   const expiresAt = useScanStore((s) => s.offlineListExpiresAt);
@@ -16,7 +11,6 @@ export function DegradedBanner() {
   const pending = useScanStore((s) => s.pending.length);
   const [, tick] = useState(0);
 
-  // Le compte à rebours doit rester lisible sans action de l'agent.
   useEffect(() => {
     if (!degraded) return;
     const timer = setInterval(() => tick((n) => n + 1), 30_000);

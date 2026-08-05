@@ -3,7 +3,6 @@ import { StyleSheet, View } from 'react-native';
 
 import { colors } from '@/theme/tokens';
 
-/** Pastille réseau : verte en ligne, ambre hors ligne. */
 export function StatusDot({ online }: { online: boolean }) {
   return (
     <View

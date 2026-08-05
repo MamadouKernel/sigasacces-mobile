@@ -12,9 +12,7 @@ import { Viewfinder } from '@/features/scan/components/Viewfinder';
 import { useScanStore } from '@/features/scan/scan.store';
 import { colors } from '@/theme/tokens';
 
-/** Battement de la pastille EN LIGNE / HORS LIGNE et de la bascule dégradée. */
 const HEALTH_INTERVAL_MS = 30_000;
-/** Rafraîchissement de la liste signée, largement sous son TTL de 4 h. */
 const DAY_LIST_INTERVAL_MS = 15 * 60_000;
 
 export function ScannerScreen() {
@@ -24,8 +22,7 @@ export function ScannerScreen() {
   const refreshDayList = useScanStore((s) => s.refreshDayList);
   const [listOpen, setListOpen] = useState(false);
 
-  // « Réseau présent » ne signifie pas « serveur joignable » : seul un appel
-  // effectif à l'API fait foi pour basculer en mode dégradé, ou en sortir.
+  // seul un appel effectif à l'API fait foi pour basculer en dégradé ou en sortir
   useEffect(() => {
     void checkConnectivity();
     const timer = setInterval(() => void checkConnectivity(), HEALTH_INTERVAL_MS);

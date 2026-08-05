@@ -4,25 +4,16 @@ import { useEnrollmentStore } from '@/features/auth/enrollment.store';
 import { api, errorMessage, setAgentToken, setSiteId, type SiteConfig, type SiteRef } from '@/lib/api';
 import type { Agent, PostConfig } from '@/types/domain';
 
-/**
- * Session de l'AGENT, distincte de l'enrôlement du terminal.
- *
- * La prise de poste (`POST /api/agent/shift/start`) est la seule opération qui
- * voit le code PIN : il est transmis puis oublié, jamais conservé ni comparé
- * localement. Le terminal étant partagé entre agents successifs, quitter le
- * poste efface l'identité de l'agent sans toucher à l'enrôlement.
- */
+// Session de l'agent, distincte de l'enrôlement du terminal. Le PIN est
+// transmis à shift/start puis oublié, jamais conservé ni comparé localement.
 interface AuthState {
   agent: Agent | null;
   post: PostConfig | null;
-  /** Sites que ce terminal est autorisé à servir. */
   sites: SiteRef[];
   siteConfig: SiteConfig | null;
   busy: boolean;
 
-  /** Prise de poste : identifie l'agent auprès du serveur. */
   login: (matricule: string, pin: string) => Promise<{ ok: boolean; error?: string }>;
-  /** Charge sites et postes de contrôle après la prise de poste. */
   loadPostOptions: () => Promise<{ ok: boolean; error?: string }>;
   selectSite: (site: SiteRef) => Promise<{ ok: boolean; error?: string }>;
   configurePost: (checkpoint: SiteRef) => void;
@@ -41,8 +32,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ busy: true });
     try {
       const result = await api.shiftStart(matricule, pin);
-      // Le serveur ne délivre pas nécessairement un jeton distinct : dans ce
-      // cas le jeton d'appareil reste celui qui porte les requêtes du poste.
+      // sans jeton distinct, le jeton d'appareil continue de porter les requêtes
       if (result.token) setAgentToken(result.token);
       set({
         agent: { matricule: result.matricule, nom: result.nom, shiftId: result.shiftId },
@@ -63,13 +53,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         sites = await api.agentSites();
       } catch {
-        // Terminal mono-site : le site vient alors de l'enrôlement.
+        // terminal mono-site : le site vient de l'enrôlement
         if (enrollment?.siteId) {
           sites = [{ id: enrollment.siteId, label: enrollment.siteLabel ?? enrollment.siteId }];
         }
       }
 
-      // Un terminal lié à un seul site n'impose aucun choix à l'agent.
       const preselected =
         sites.find((s) => s.id === enrollment?.siteId) ?? (sites.length === 1 ? sites[0] : null);
       if (preselected) setSiteId(preselected.id);

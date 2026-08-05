@@ -10,11 +10,6 @@ import { useScanStore } from '@/features/scan/scan.store';
 import type { SiteRef } from '@/lib/api';
 import { colors, font, radius, spacing } from '@/theme/tokens';
 
-/**
- * Ouverture du poste : le site vient du terminal (ou d'un choix, si le
- * terminal en sert plusieurs), les postes de contrôle viennent de
- * `GET /api/site/config`. Aucun poste n'est codé en dur dans l'app.
- */
 export function ConfigPosteScreen() {
   const router = useRouter();
   const agent = useAuthStore((s) => s.agent);
@@ -36,9 +31,7 @@ export function ConfigPosteScreen() {
     setError(res.ok ? null : (res.error ?? 'Configuration du site indisponible.'));
   }, [loadPostOptions]);
 
-  // Le chargement est déclenché à l'ouverture de l'écran ; l'écriture d'état
-  // n'intervient qu'au retour de l'appel réseau, et seulement si l'écran est
-  // toujours monté (l'agent peut quitter le poste entre-temps).
+  // pas d'écriture d'état si l'agent a quitté l'écran pendant l'appel réseau
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -63,8 +56,7 @@ export function ConfigPosteScreen() {
   const submit = () => {
     if (!checkpoint) return;
     configurePost(checkpoint);
-    // La liste signée du jour est chargée dès l'ouverture : elle est ce qui
-    // permettra de valider si le réseau tombe pendant le poste.
+    // liste signée chargée tout de suite : c'est elle qui validera hors ligne
     void refreshDayList();
     router.replace('/scanner');
   };

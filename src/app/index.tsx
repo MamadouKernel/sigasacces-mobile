@@ -10,7 +10,7 @@ export default function Index() {
   const agent = useAuthStore((s) => s.agent);
   const post = useAuthStore((s) => s.post);
 
-  // Lecture du stockage sécurisé en cours — ne pas rediriger à l'aveugle.
+  // stockage sécurisé en cours de lecture : ne pas rediriger encore
   if (!hydrated) return null;
 
   if (!enrollment) return <Redirect href="/enrolement" />;

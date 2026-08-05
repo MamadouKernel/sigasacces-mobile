@@ -10,7 +10,6 @@ interface Props {
   color?: string;
 }
 
-/** Petit bouton bordé de l'en-tête (liste, direction, haptique…). */
 export function IconButton({ label, onPress, active, color }: Props) {
   const tint = color ?? colors.text;
   return (

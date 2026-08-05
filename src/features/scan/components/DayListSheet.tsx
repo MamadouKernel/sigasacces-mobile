@@ -33,11 +33,8 @@ function statusOf(visit: OfflineVisit): { label: string; color: string } {
   };
 }
 
-/**
- * Liste des attendus du jour — données minimales (moindre privilège) : ni
- * motif, ni coordonnées. Sert aussi au cas « téléphone déchargé » : la
- * recherche par nom permet de retrouver un visiteur sans QR.
- */
+// Données minimales (ni motif, ni coordonnées) ; la recherche par nom couvre
+// le cas du visiteur sans QR.
 export function DayListSheet({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const visits = useScanStore((s) => s.visits);

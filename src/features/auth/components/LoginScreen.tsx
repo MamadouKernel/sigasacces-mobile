@@ -19,10 +19,6 @@ import { useAuthStore } from '@/features/auth/auth.store';
 import { useEnrollmentStore } from '@/features/auth/enrollment.store';
 import { colors, font, radius, spacing } from '@/theme/tokens';
 
-/**
- * Prise de poste. Le matricule et le code PIN sont vérifiés par le serveur
- * central : le PIN n'est jamais comparé localement ni conservé par l'app.
- */
 export function LoginScreen() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
@@ -60,7 +56,7 @@ export function LoginScreen() {
   const submit = async () => {
     if (!canSubmit) return;
     const res = await login(matricule.trim(), pin);
-    // Le PIN est effacé de la mémoire de l'écran quoi qu'il arrive.
+    // PIN effacé quoi qu'il arrive
     setPin('');
     if (!res.ok) {
       setError(res.error ?? 'Prise de poste impossible');

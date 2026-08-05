@@ -9,7 +9,6 @@ const RETICLE = 210;
 
 interface Props {
   onScanned: (payload: string) => void;
-  /** Le scan est ignoré quand un verdict ou un panneau est affiché. */
   paused: boolean;
 }
 
@@ -30,7 +29,7 @@ export function Viewfinder({ onScanned, paused }: Props) {
   }, [scanline]);
 
   const handleScan = ({ data }: { data: string }) => {
-    // Anti-rafale : la caméra émet en continu tant que le QR est dans le cadre.
+    // la caméra émet en continu tant que le QR est dans le cadre
     const now = Date.now();
     if (paused || now - lastScanAt.current < 2000) return;
     lastScanAt.current = now;

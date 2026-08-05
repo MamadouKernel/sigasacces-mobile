@@ -4,7 +4,6 @@ import { create } from 'zustand';
 import { allPublicKeys, publicKeyFor, useEnrollmentStore } from '@/features/auth/enrollment.store';
 import { useAuthStore } from '@/features/auth/auth.store';
 import {
-  ApiError,
   NetworkError,
   api,
   errorMessage,
@@ -36,7 +35,6 @@ import type {
 const OFFLINE_LIST_KEY = 'novacces.offline-list';
 const PENDING_SCANS_KEY = 'novacces.pending-scans';
 
-/** Libellés des refus prononcés par le serveur, indexés par `verdictCode`. */
 const DENIAL_LABELS: Partial<Record<VerdictCode, { title: string; reason: string }>> = {
   INVALID_SIGNATURE: { title: 'QR INVALIDE', reason: 'SIGNATURE INVALIDE — QR ALTÉRÉ' },
   DENIED_Excluded: { title: 'ACCÈS REFUSÉ', reason: 'VOIR POSTE DE GARDE' },
@@ -50,13 +48,7 @@ const DENIAL_LABELS: Partial<Record<VerdictCode, { title: string; reason: string
   DENIED_NoActiveEntry: { title: 'AUCUNE ENTRÉE ENREGISTRÉE', reason: 'SORTIE IMPOSSIBLE' },
 };
 
-/**
- * Traduit le verdict du serveur en écran d'agent.
- *
- * Règle de sûreté : seule une autorisation explicite (`isGranted`) ouvre la
- * porte. Un `verdictCode` inconnu — code ajouté côté serveur, réponse
- * tronquée — est présenté comme un refus, jamais comme une autorisation.
- */
+// Un verdictCode inconnu est présenté comme un refus, jamais comme une autorisation.
 function verdictFromServer(result: ScanResult): Verdict {
   const who = result.visitorName ?? 'Visiteur';
 
@@ -101,7 +93,7 @@ function verdictFromServer(result: ScanResult): Verdict {
   };
 }
 
-/** Incident technique — présenté comme tel, jamais comme un refus d'accès. */
+// Incident technique — présenté comme tel, pas comme un refus d'accès.
 function verdictFromFailure(code: VerdictCode, detail: string): Verdict {
   return {
     kind: 'no',
@@ -115,7 +107,6 @@ function verdictFromFailure(code: VerdictCode, detail: string): Verdict {
   };
 }
 
-/** Identifiant de visite porté par le QR signé (vérifié au préalable). */
 function visitIdFromPayload(payload: Record<string, unknown> | null): string | null {
   if (!payload) return null;
   for (const key of ['visitId', 'visitToken', 'vid', 'sub', 'jti']) {
@@ -126,13 +117,11 @@ function visitIdFromPayload(payload: Record<string, unknown> | null): string | n
 }
 
 interface ScanState {
-  /** Liste du jour : attendus (en ligne) ou liste signée (hors ligne). */
   visits: OfflineVisit[];
   journal: JournalEntry[];
   scansToday: number;
   direction: Direction;
   degraded: boolean;
-  /** Liste locale au-delà de son TTL : plus aucune validation hors ligne. */
   ttlExpired: boolean;
   offlineListExpiresAt: number | null;
   pending: PendingScan[];
@@ -146,7 +135,6 @@ interface ScanState {
   closeVerdict: () => void;
   toggleDirection: () => void;
   toggleHaptics: () => void;
-  /** Interroge `/api/health` et bascule le mode dégradé en conséquence. */
   checkConnectivity: () => Promise<void>;
   refreshDayList: () => Promise<void>;
   resync: () => Promise<void>;
@@ -175,8 +163,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
   busy: false,
 
   hydrate: async () => {
-    // Une coupure peut survenir terminal éteint : la liste signée et les scans
-    // en attente doivent survivre au redémarrage.
+    // La liste signée et la file doivent survivre au redémarrage du terminal.
     const [rawList, rawPending] = await Promise.all([
       getItem(OFFLINE_LIST_KEY),
       getItem(PENDING_SCANS_KEY),
@@ -192,7 +179,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
       }
       if (rawPending) set({ pending: JSON.parse(rawPending) as PendingScan[] });
     } catch {
-      /* cache illisible : il sera régénéré au prochain rafraîchissement */
+      // cache illisible : régénéré au prochain rafraîchissement
     }
   },
 
@@ -209,7 +196,6 @@ export const useScanStore = create<ScanState>((set, get) => ({
       now: Date.now(),
     };
 
-    // ── Mode nominal : le serveur est seul juge (REQ-SEC-02) ───────────────
     if (!state.degraded) {
       set({ busy: true });
       try {
@@ -237,13 +223,10 @@ export const useScanStore = create<ScanState>((set, get) => ({
         return;
       } catch (err) {
         if (err instanceof NetworkError) {
-          // Bascule en mode dégradé, puis reprise du même scan hors ligne.
+          // bascule en dégradé, le même scan est repris hors ligne ci-dessous
           set({ busy: false, degraded: true });
         } else {
-          const verdict = verdictFromFailure(
-            err instanceof ApiError ? 'SERVER_ERROR' : 'SERVER_ERROR',
-            errorMessage(err),
-          );
+          const verdict = verdictFromFailure('SERVER_ERROR', errorMessage(err));
           feedback('no', state.haptics);
           set((s) => ({
             busy: false,
@@ -261,11 +244,10 @@ export const useScanStore = create<ScanState>((set, get) => ({
       }
     }
 
-    // ── Mode dégradé : décision locale sur la liste signée ─────────────────
+    // Mode dégradé : la signature se vérifie sans serveur, un QR forgé est
+    // rejeté même pendant une coupure.
     const current = get();
 
-    // La vérification de signature ne requiert pas le serveur : un QR forgé
-    // est rejeté même pendant une coupure.
     const kid = readJwsHeader(payload)?.kid;
     const candidates = publicKeyFor(kid) ? [publicKeyFor(kid) as string] : allPublicKeys();
     let claims: Record<string, unknown> | null = null;
@@ -295,9 +277,6 @@ export const useScanStore = create<ScanState>((set, get) => ({
         );
       }
 
-      // Toute validation prononcée hors ligne est confrontée au registre
-      // central à la reconnexion — y compris les refus, qui documentent les
-      // tentatives survenues pendant la coupure.
       if (visit && decision.verdict.kind !== 'no') {
         const pending: PendingScan[] = [
           ...current.pending,
@@ -336,7 +315,6 @@ export const useScanStore = create<ScanState>((set, get) => ({
       await api.health();
       if (get().degraded) {
         set({ degraded: false });
-        // Le retour du réseau déclenche la confrontation des scans hors ligne.
         await get().resync();
         await get().refreshDayList();
       }
@@ -348,8 +326,6 @@ export const useScanStore = create<ScanState>((set, get) => ({
   refreshDayList: async () => {
     const now = Date.now();
     try {
-      // La liste signée fait foi : c'est elle qui autorisera les validations
-      // pendant la prochaine coupure. Les attendus servent de repli d'affichage.
       const envelope = await api.offlineList();
       let payload: unknown = envelope.payload;
 
@@ -362,8 +338,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
           if (payload) break;
         }
         if (!payload) {
-          // Une liste non vérifiable ne doit jamais servir de base à une
-          // validation hors ligne : on conserve l'ancienne, et le TTL fera foi.
+          // liste non vérifiable : on garde l'ancienne, le TTL fera foi
           set({ lastSync: 'Liste du jour rejetée : signature non vérifiable' });
           return;
         }
@@ -387,7 +362,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
         set({ degraded: true });
         return;
       }
-      // Repli : la liste des attendus alimente au moins l'écran de recherche.
+      // repli : les attendus alimentent au moins l'écran de recherche
       try {
         const expected = await api.expectedToday();
         set({
@@ -397,7 +372,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
           })),
         });
       } catch {
-        /* l'écran « Attendus » restera vide, sans conséquence sur le scan */
+        // l'écran « Attendus » restera vide, sans conséquence sur le scan
       }
     }
   },
@@ -437,7 +412,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
       }));
       await setItem(PENDING_SCANS_KEY, JSON.stringify([]));
     } catch (err) {
-      // Les scans restent en file : ils ne doivent jamais être perdus.
+      // les scans restent en file, ils ne doivent jamais être perdus
       set({ lastSync: `Resynchronisation impossible : ${errorMessage(err)}` });
     }
   },
@@ -449,14 +424,12 @@ export const useScanStore = create<ScanState>((set, get) => ({
     }),
 }));
 
-/** Durée restante avant expiration de la liste locale, pour l'affichage. */
 export function ttlLabel(expiresAt: number | null, expired: boolean): string {
   if (expired || !expiresAt) return 'EXPIRÉ';
   if (Date.now() >= expiresAt) return 'EXPIRÉ';
   return durSince(Date.now(), expiresAt);
 }
 
-/** Le terminal doit être enrôlé pour que le mode dégradé puisse vérifier quoi que ce soit. */
 export function canVerifyOffline(): boolean {
   return Object.keys(useEnrollmentStore.getState().enrollment?.publicKeys ?? {}).length > 0;
 }

@@ -10,9 +10,7 @@ export default function RootLayout() {
   const hydrate = useEnrollmentStore((s) => s.hydrate);
   const hydrateScans = useScanStore((s) => s.hydrate);
 
-  // Une coupure réseau peut survenir terminal éteint : l'enrôlement, la liste
-  // signée du jour et les scans en attente de resynchronisation sont donc
-  // rechargés depuis le stockage sécurisé avant tout affichage.
+  // Enrôlement, liste signée et file de resync rechargés avant tout affichage.
   useEffect(() => {
     void hydrate();
     void hydrateScans();

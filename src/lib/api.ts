@@ -1,19 +1,10 @@
 import type { AccessMode, Direction, VerdictCode, VisitStatus } from '@/types/domain';
 
-/**
- * Client HTTP de l'API NOVACCÈS (`NovAcces.Api`).
- *
- * Chemins et corps de requête calqués sur le contrat OpenAPI publié
- * (https://api.sigasacces.com/swagger/v1/swagger.json). Ce contrat ne décrit
- * AUCUN schéma de réponse : chaque opération y est déclarée « 200 OK » sans
- * corps typé. Les réponses sont donc normalisées ici de façon défensive —
- * chaque hypothèse est signalée par un commentaire `CONTRAT À CONFIRMER` et
- * regroupée dans la section « Normalisation » pour être corrigée en un seul
- * endroit dès que le backend publiera ses schémas.
- */
+// Le contrat OpenAPI ne type aucune réponse. Les parseurs ci-dessous acceptent
+// plusieurs graphies et échouent via ContractError ; les hypothèses sont
+// marquées CONTRAT À CONFIRMER (voir docs/besoins-api-app-agent.md).
 
 export const apiConfig = {
-  /** Serveur de production par défaut ; surchargeable par site à l'enrôlement. */
   baseUrl: process.env.EXPO_PUBLIC_API_URL?.trim() || 'https://api.sigasacces.com',
   timeoutMs: 10_000,
 };
@@ -22,20 +13,8 @@ export function setBaseUrl(url: string) {
   apiConfig.baseUrl = url.trim().replace(/\/+$/, '');
 }
 
-// ─── Session ────────────────────────────────────────────────────────────────
-
-/**
- * Deux jetons distincts, dans cet ordre :
- *
- *  - `deviceToken` — délivré à l'activation du terminal. Il porte l'identité de
- *    l'APPAREIL et sert à joindre les endpoints d'amorçage (`/api/agent/sites`,
- *    `/api/agent/shift/start`) avant qu'un agent ne soit identifié.
- *  - `agentToken` — délivré à la prise de poste. Il porte l'identité de
- *    l'AGENT et prime sur le précédent tant que le poste est ouvert.
- *
- * L'API répond `WWW-Authenticate: Bearer` sur 401 : les deux sont transmis en
- * `Authorization: Bearer`.
- */
+// deviceToken : délivré à l'activation, identité de l'appareil.
+// agentToken : délivré à la prise de poste, prime tant que le poste est ouvert.
 let deviceToken: string | null = null;
 let agentToken: string | null = null;
 let siteId: string | null = null;
@@ -58,9 +37,6 @@ export function clearSession() {
   siteId = null;
 }
 
-// ─── Erreurs ────────────────────────────────────────────────────────────────
-
-/** Réponse HTTP non-2xx : le serveur a répondu, la requête est en cause. */
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -71,10 +47,7 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Serveur injoignable ou délai dépassé : c'est le déclencheur du mode dégradé
- * (liste locale signée), PAS un refus d'accès.
- */
+/** Serveur injoignable : déclencheur du mode dégradé, pas un refus d'accès. */
 export class NetworkError extends Error {
   constructor(message = 'Serveur central injoignable') {
     super(message);
@@ -82,12 +55,7 @@ export class NetworkError extends Error {
   }
 }
 
-/**
- * Le serveur a répondu 2xx mais dans une forme que l'app ne sait pas lire.
- * Distinguée d'`ApiError` pour que le terminal ne présente jamais un défaut
- * d'intégration comme un refus d'accès : l'agent doit voir « contrat serveur
- * inattendu », pas « accès refusé ».
- */
+/** Réponse 2xx illisible : l'agent doit voir un défaut d'intégration, pas un refus. */
 export class ContractError extends Error {
   constructor(what: string, received: unknown) {
     super(`Réponse serveur inattendue (${what}) — clés reçues : ${describeKeys(received)}`);
@@ -100,7 +68,6 @@ function describeKeys(value: unknown): string {
   return typeof value;
 }
 
-/** Message affichable à l'agent — jamais une pile technique. */
 export function errorMessage(err: unknown): string {
   if (err instanceof NetworkError) {
     return 'Serveur central injoignable — vérifiez le réseau du terminal.';
@@ -115,8 +82,6 @@ export function errorMessage(err: unknown): string {
   return (err as Error)?.message ?? 'Erreur inattendue.';
 }
 
-// ─── Transport ──────────────────────────────────────────────────────────────
-
 async function request<T>(
   method: 'GET' | 'POST',
   path: string,
@@ -129,7 +94,6 @@ async function request<T>(
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const bearer = agentToken ?? deviceToken;
   if (bearer) headers.Authorization = `Bearer ${bearer}`;
-  // Middleware multi-tenant côté serveur (TenantResolutionMiddleware).
   if (siteId) headers['X-Site-Id'] = siteId;
 
   let res: Response;
@@ -159,7 +123,6 @@ async function request<T>(
   }
 }
 
-/** L'API renvoie ses refus sous la forme `{ "error": "…" }`. */
 function extractError(text: string): string | null {
   if (!text) return null;
   try {
@@ -169,16 +132,10 @@ function extractError(text: string): string | null {
       if (typeof value === 'string' && value) return value;
     }
   } catch {
-    /* corps non-JSON : renvoyé tel quel ci-dessous */
+    // corps non-JSON
   }
   return text.slice(0, 200);
 }
-
-// ─── Normalisation des réponses ─────────────────────────────────────────────
-//
-// Le contrat OpenAPI ne typant aucune réponse, chaque lecture accepte les
-// graphies plausibles (camelCase .NET, libellés français du contrat PDF) et
-// échoue bruyamment via ContractError plutôt que de deviner en silence.
 
 type Json = Record<string, unknown>;
 
@@ -210,7 +167,6 @@ function pickNumber(source: Json, ...keys: string[]): number | undefined {
   return undefined;
 }
 
-/** Date ISO 8601 → timestamp local, ou `undefined` si absente/illisible. */
 function pickDate(source: Json, ...keys: string[]): number | undefined {
   const raw = pickString(source, ...keys);
   if (!raw) return undefined;
@@ -226,16 +182,12 @@ function pickArray(source: Json, ...keys: string[]): Json[] {
   return [];
 }
 
-// ─── Santé et clés publiques (formes vérifiées en production) ───────────────
-
 export interface HealthResult {
   status: string;
-  /** Heure du serveur : toute décision horaire est serveur (REQ-SEC-02). */
   serverTimeUtc?: number;
 }
 
 export interface PublicKeysResult {
-  /** Clés publiques ES256 par `kid`, courante et retirées encore acceptées. */
   keys: Record<string, string>;
   currentKid: string;
 }
@@ -257,8 +209,6 @@ function parsePublicKeys(raw: unknown): PublicKeysResult {
   return { keys, currentKid };
 }
 
-// ─── Enrôlement du terminal ─────────────────────────────────────────────────
-
 export interface DeviceActivationRequest {
   ticket: string;
   deviceInstanceId: string;
@@ -267,9 +217,7 @@ export interface DeviceActivationRequest {
 }
 
 export interface DeviceActivationResult {
-  /** Jeton d'appareil ; à conserver en stockage sécurisé. */
   token: string;
-  /** Site auquel le terminal est lié, s'il est déjà déterminé à l'activation. */
   siteId?: string;
   siteLabel?: string;
 }
@@ -287,10 +235,7 @@ function parseDeviceActivation(raw: unknown): DeviceActivationResult {
   };
 }
 
-// ─── Prise de poste ─────────────────────────────────────────────────────────
-
 export interface ShiftStartResult {
-  /** Jeton de session de l'agent, si l'API en délivre un distinct. */
   token?: string;
   matricule: string;
   nom?: string;
@@ -302,16 +247,13 @@ function parseShiftStart(raw: unknown, fallbackMatricule: string): ShiftStartRes
   if (!data) throw new ContractError('/api/agent/shift/start', raw);
   const agent = asObject(data.agent) ?? data;
   return {
-    // CONTRAT À CONFIRMER : jeton de session agent (peut être absent si le
-    // jeton d'appareil suffit pour toute la durée du poste).
+    // CONTRAT À CONFIRMER : jeton de session agent (peut être absent).
     token: pickString(data, 'token', 'accessToken', 'jwt'),
     matricule: pickString(agent, 'matricule', 'badge', 'agentId') ?? fallbackMatricule,
     nom: pickString(agent, 'nom', 'name', 'displayName', 'fullName'),
     shiftId: pickString(data, 'shiftId', 'id', 'posteId'),
   };
 }
-
-// ─── Sites et configuration du poste ────────────────────────────────────────
 
 export interface SiteRef {
   id: string;
@@ -320,12 +262,9 @@ export interface SiteRef {
 
 export interface SiteConfig {
   siteLabel?: string;
-  /** Postes de contrôle du site (« Poste 1 », « Entrée principale »…). */
   checkpoints: SiteRef[];
-  /** Fenêtre de validité, en minutes, affichée à l'agent. */
   windowBeforeMin?: number;
   windowAfterMin?: number;
-  /** TTL maximal de la liste locale signée, en heures (≤ 4 — REQ-SEC-06). */
   offlineListTtlHours?: number;
 }
 
@@ -363,14 +302,11 @@ function parseSiteConfig(raw: unknown): SiteConfig {
   };
 }
 
-// ─── Visites attendues et liste hors ligne ──────────────────────────────────
-
 export interface ExpectedVisit {
   visitId: string;
   nom: string;
   mode: AccessMode;
   statut: VisitStatus;
-  /** Bornes de la fenêtre de validité, calculées par le serveur. */
   fenetreDebut?: number;
   fenetreFin?: number;
   present: boolean;
@@ -407,25 +343,18 @@ function parseExpectedVisits(raw: unknown): ExpectedVisit[] {
 }
 
 export interface OfflineList {
-  /** JWS complet tel que reçu — conservé pour re-vérification après stockage. */
   jws?: string;
   visits: ExpectedVisit[];
   generatedAt?: number;
-  /** Au-delà, toute validation hors ligne est refusée (REQ-SEC-06). */
   expiresAt?: number;
 }
 
-/**
- * La liste du jour est censée être servie enveloppée dans un JWS ES256. Selon
- * que le serveur renvoie le JWS brut ou un objet l'encapsulant, la charge
- * utile est extraite puis vérifiée par l'appelant (`verifyJws`).
- */
+// CONTRAT À CONFIRMER : liste servie en JWS compact brut, ou en objet JSON ?
 function parseOfflineListEnvelope(raw: unknown): { jws?: string; payload: unknown } {
   if (typeof raw === 'string') return { jws: raw, payload: undefined };
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/agent/offline-list', raw);
   const jws = pickString(data, 'jws', 'token', 'signedList', 'payload', 'signedPayload');
-  // Un JWS compact contient exactement deux points et aucune espace.
   if (jws && jws.split('.').length === 3) return { jws, payload: undefined };
   return { jws: undefined, payload: data };
 }
@@ -441,9 +370,6 @@ export function parseOfflineListPayload(raw: unknown, jws?: string): OfflineList
   };
 }
 
-// ─── Scan ───────────────────────────────────────────────────────────────────
-
-/** Sens du poste côté API : enum .NET `CheckpointDirection`. */
 export type ApiDirection = 'Entry' | 'Exit';
 
 export function toApiDirection(direction: Direction): ApiDirection {
@@ -456,7 +382,6 @@ export interface ScanResult {
   isSecurityEvent: boolean;
   verdictCode: VerdictCode;
   visitorName?: string;
-  /** Dépassement de la durée prévue, en minutes — informatif, jamais bloquant. */
   overstayMinutes?: number;
 }
 
@@ -474,8 +399,6 @@ function parseScanResult(raw: unknown): ScanResult {
     overstayMinutes: pickNumber(data, 'overstayMinutes', 'overstay'),
   };
 }
-
-// ─── Resynchronisation des scans hors ligne ─────────────────────────────────
 
 /** `OfflineScanDto` du contrat OpenAPI (`POST /api/agent/resync`). */
 export interface OfflineScanPayload {
@@ -508,10 +431,7 @@ function parseResync(raw: unknown, sent: number): ResyncResult {
   return { accepted: pickNumber(data, 'accepted', 'acceptes') ?? sent - conflicts.length, conflicts };
 }
 
-// ─── Endpoints ──────────────────────────────────────────────────────────────
-
 export const api = {
-  /** Pastille EN LIGNE / HORS LIGNE : « réseau présent » ≠ « serveur joignable ». */
   async health(): Promise<HealthResult> {
     const raw = await request<unknown>('GET', '/api/health');
     const data = asObject(raw) ?? {};
@@ -521,49 +441,38 @@ export const api = {
     };
   },
 
-  /** Clés ES256 de vérification hors ligne — rotation sans republier l'app. */
   async publicKeys(): Promise<PublicKeysResult> {
     return parsePublicKeys(await request<unknown>('GET', '/api/keys/public'));
   },
 
-  /** Active le terminal avec le ticket QR temporaire, à usage unique. */
   async activateDevice(payload: DeviceActivationRequest): Promise<DeviceActivationResult> {
     return parseDeviceActivation(
       await request<unknown>('POST', '/api/device-enrollments/activate', payload),
     );
   },
 
-  /** Sites que ce terminal est autorisé à servir. */
   async agentSites(): Promise<SiteRef[]> {
     return parseSites(await request<unknown>('GET', '/api/agent/sites'));
   },
 
-  /** Postes de contrôle et paramètres du site courant. */
   async siteConfig(): Promise<SiteConfig> {
     return parseSiteConfig(await request<unknown>('GET', '/api/site/config'));
   },
 
-  /** Prise de poste : identifie l'agent (matricule + PIN) et ouvre un poste. */
   async shiftStart(matricule: string, pin: string): Promise<ShiftStartResult> {
     const raw = await request<unknown>('POST', '/api/agent/shift/start', { matricule, pin });
     return parseShiftStart(raw, matricule);
   },
 
-  /** Visiteurs attendus aujourd'hui — données minimales (moindre privilège). */
   async expectedToday(): Promise<ExpectedVisit[]> {
     return parseExpectedVisits(await request<unknown>('GET', '/api/agent/expected-today'));
   },
 
-  /** Liste signée du jour, pour le mode dégradé (TTL ≤ 4 h). */
   async offlineList(): Promise<{ jws?: string; payload: unknown }> {
     return parseOfflineListEnvelope(await request<unknown>('GET', '/api/agent/offline-list'));
   },
 
-  /**
-   * Scan d'un QR au poste. L'arbre de décision complet (fenêtre, anti-rejeu,
-   * exclusion, cycle entrée/sortie) vit côté serveur : l'app affiche le verdict
-   * sans jamais le recalculer en ligne.
-   */
+  // L'arbre de décision vit côté serveur : on affiche le verdict sans le recalculer.
   async scan(
     signedQrPayload: string,
     direction: Direction,
@@ -580,7 +489,6 @@ export const api = {
     );
   },
 
-  /** Rejoue les scans hors-ligne contre le registre central et remonte les écarts. */
   async resync(scans: OfflineScanPayload[]): Promise<ResyncResult> {
     const raw = await request<unknown>('POST', '/api/agent/resync', { scans });
     return parseResync(raw, scans.length);

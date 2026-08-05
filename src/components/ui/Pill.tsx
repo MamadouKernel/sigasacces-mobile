@@ -8,7 +8,6 @@ interface Props {
   color: string;
 }
 
-/** Badge de statut façon maquette (liste des attendus, verdicts…). */
 export function Pill({ label, color }: Props) {
   return (
     <View style={[styles.pill, { borderColor: color }]}>

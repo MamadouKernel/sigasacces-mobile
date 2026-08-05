@@ -1,23 +1,12 @@
 import { MIN, durSince, fmt, fmtDur } from '@/lib/time';
 import type { Direction, JournalEntry, OfflineVisit, Verdict, VerdictCode } from '@/types/domain';
 
-/**
- * Arbre de décision du MODE DÉGRADÉ uniquement.
- *
- * En fonctionnement nominal, aucune décision n'est prise ici : le terminal
- * envoie le QR à `POST /api/scan` et affiche le verdict du serveur, seul
- * détenteur du registre (REQ-SEC-02). Ce module ne sert que lorsque le serveur
- * est injoignable : il tranche à partir de la liste du jour signée, avec les
- * bornes de fenêtre déjà calculées par le serveur — l'heure du client ne sert
- * qu'à situer l'instant du scan, jamais à définir la règle.
- *
- * Toute validation prononcée ici est mise en file et confrontée au registre
- * central à la reconnexion (`POST /api/agent/resync`).
- */
+// Décision du mode dégradé uniquement : en nominal le verdict vient de
+// POST /api/scan. Les bornes de fenêtre sont celles calculées par le serveur ;
+// toute validation locale part en file de resync à la reconnexion.
 
 export interface ScanContext {
   direction: Direction;
-  /** Liste locale au-delà de son TTL : plus aucune validation possible. */
   ttlExpired: boolean;
   agentId: string;
   now: number;
@@ -25,14 +14,12 @@ export interface ScanContext {
 
 export interface ScanDecision {
   verdict: Verdict;
-  /** Modifications à appliquer sur la visite locale (le store s'en charge). */
   patch: Partial<OfflineVisit>;
   journal: JournalEntry;
 }
 
 export type WindowState = 'early' | 'ok' | 'late';
 
-/** Position du scan dans la fenêtre de validité fournie par le serveur. */
 export function windowState(visit: OfflineVisit, now: number): WindowState {
   if (visit.fenetreDebut !== undefined && now < visit.fenetreDebut) return 'early';
   if (visit.fenetreFin !== undefined && now > visit.fenetreFin) return 'late';
@@ -71,7 +58,6 @@ function deny(
   };
 }
 
-/** Liste locale expirée : le terminal ne peut plus rien affirmer (REQ-SEC-06). */
 export function decideListExpired(ctx: ScanContext): ScanDecision {
   return {
     verdict: {
@@ -91,11 +77,6 @@ export function decideListExpired(ctx: ScanContext): ScanDecision {
   };
 }
 
-/**
- * QR dont la signature ES256 ne correspond pas à une clé publique connue :
- * altéré ou forgé. Détectable hors ligne, puisque la vérification de signature
- * ne requiert pas le serveur.
- */
 export function decideInvalidSignature(ctx: ScanContext, degraded: boolean): ScanDecision {
   return {
     verdict: {
@@ -123,7 +104,6 @@ export function decideInvalidSignature(ctx: ScanContext, degraded: boolean): Sca
   };
 }
 
-/** QR correctement signé mais absent de la liste du jour (émis après la coupure). */
 export function decideNotInList(ctx: ScanContext): ScanDecision {
   return {
     verdict: {
@@ -143,11 +123,10 @@ export function decideNotInList(ctx: ScanContext): ScanDecision {
   };
 }
 
-/** Décision hors ligne pour une visite présente dans la liste signée du jour. */
 export function decideOffline(visit: OfflineVisit, ctx: ScanContext): ScanDecision {
   const who = visit.nom;
 
-  // 1. Poste SORTIE : on ne gère que des sorties — jamais bloquées.
+  // Poste SORTIE : les sorties ne sont jamais bloquées.
   if (ctx.direction === 'sortie') {
     if (visit.present) {
       const presence = visit.entreeAt ? durSince(visit.entreeAt, ctx.now) : '—';
@@ -190,7 +169,7 @@ export function decideOffline(visit: OfflineVisit, ctx: ScanContext): ScanDecisi
     };
   }
 
-  // 2. Poste ENTRÉE : titulaire déjà sur site = suspicion de QR copié ou volé.
+  // Poste ENTRÉE : titulaire déjà sur site = suspicion de QR copié ou volé.
   if (visit.present) {
     const entree = visit.entreeAt ? fmt(visit.entreeAt) : '—';
     return {
@@ -212,7 +191,6 @@ export function decideOffline(visit: OfflineVisit, ctx: ScanContext): ScanDecisi
     };
   }
 
-  // 3. Statuts bloquants.
   if (visit.statut === 'revoque') {
     return deny(ctx, visit.nom, who, 'DENIED_Revoked', 'QR RÉVOQUÉ PAR LA SÛRETÉ', "Scan d'un QR révoqué");
   }
@@ -229,7 +207,6 @@ export function decideOffline(visit: OfflineVisit, ctx: ScanContext): ScanDecisi
     );
   }
 
-  // 4. Fenêtre de validité, telle que bornée par le serveur.
   const w = windowState(visit, ctx.now);
   if (w === 'late' && visit.fenetreFin !== undefined) {
     return deny(
@@ -244,7 +221,6 @@ export function decideOffline(visit: OfflineVisit, ctx: ScanContext): ScanDecisi
     );
   }
 
-  // 5. Entrée autorisée.
   let det = visit.mode === 'unique' ? 'Accès unique · fenêtre respectée' : 'Accès 30 j';
   const patch: Partial<OfflineVisit> = { present: true, entreeAt: ctx.now, exited: false };
   if (visit.mode === 'unique') {
@@ -266,7 +242,6 @@ export function decideOffline(visit: OfflineVisit, ctx: ScanContext): ScanDecisi
   };
 }
 
-/** Dépassement de la durée prévue, en minutes — informatif, jamais bloquant. */
 export function overdueLabel(overstayMinutes: number | undefined): string {
   return overstayMinutes && overstayMinutes > 0 ? ` · dépassement +${fmtDur(overstayMinutes)}` : '';
 }

@@ -1,32 +1,8 @@
 import { p256 } from '@noble/curves/nist.js';
 
-/**
- * Primitives ES256 (P-256 / SHA-256) du terminal, en JavaScript pur.
- *
- * Deux usages, tous deux exigés par le contrat de sécurité :
- *
- *  1. **Identité de l'appareil** — l'enrôlement lie le terminal à une paire de
- *     clés générée ICI. La clé privée ne quitte jamais l'appareil (stockage
- *     Keystore/Keychain) ; seule la clé publique part au serveur. Un terminal
- *     volé se révoque côté serveur sans toucher aux comptes agents.
- *
- *  2. **Vérification hors ligne** — les QR visiteurs et la liste du jour sont
- *     des JWS signés ES256 par le serveur. Le terminal doit pouvoir en
- *     vérifier la signature sans réseau (REQ-SEC-06) : un QR forgé est donc
- *     détecté même pendant une coupure.
- *
- * Aucune dépendance native n'est requise (@noble/curves est du JS pur), ce qui
- * évite d'ajouter une surface d'attaque et garde le binaire portable.
- */
+// ES256 (P-256 / SHA-256) en JS pur : identité de l'appareil à l'enrôlement,
+// et vérification hors ligne des JWS serveur (QR visiteurs, liste du jour).
 
-// ─── Source d'aléa ──────────────────────────────────────────────────────────
-
-/**
- * Aucune source d'entropie cryptographique n'est disponible. Levée plutôt que
- * contournée : une clé d'appareil tirée d'un générateur faible (`Math.random`)
- * serait prédictible, donc l'identité du terminal serait forgeable. Mieux vaut
- * un enrôlement qui échoue franchement qu'un terminal usurpable.
- */
 export class SecureRandomUnavailableError extends Error {
   constructor() {
     super(
@@ -40,18 +16,13 @@ type ExpoCryptoModule = typeof import('expo-crypto');
 
 let expoCrypto: ExpoCryptoModule | null | undefined;
 
-/** Le runtime Expo expose les modules natifs sur `globalThis.expo.modules`. */
 function nativeCryptoAvailable(): boolean {
   const expoGlobal = (globalThis as { expo?: { modules?: Record<string, unknown> } }).expo;
   return Boolean(expoGlobal?.modules?.ExpoCrypto);
 }
 
-/**
- * Chargement paresseux d'expo-crypto : requérir le module alors que le binaire
- * installé ne l'embarque pas lève « Cannot find native module » au chargement
- * du fichier, ce qui empêcherait l'app de démarrer — y compris les écrans qui
- * n'ont aucun besoin d'aléa.
- */
+// Chargement paresseux : un require d'expo-crypto sur un binaire qui ne
+// l'embarque pas lève « Cannot find native module » dès l'import du fichier.
 function getExpoCrypto(): ExpoCryptoModule | null {
   if (expoCrypto === undefined) {
     if (!nativeCryptoAvailable()) {
@@ -68,14 +39,8 @@ function getExpoCrypto(): ExpoCryptoModule | null {
   return expoCrypto;
 }
 
-/**
- * Remplit un tableau d'octets aléatoires. Utilise `crypto.getRandomValues` du
- * moteur JS s'il existe, sinon la source de l'OS via expo-crypto.
- *
- * N'est requis que pour créer l'identité de l'appareil : la vérification des
- * signatures (QR, liste du jour) n'a besoin d'aucun aléa et reste donc
- * opérationnelle même sans module natif.
- */
+// Lève plutôt que de retomber sur Math.random : une clé d'appareil prédictible
+// rendrait l'identité du terminal forgeable.
 export function secureRandomBytes(length: number): Uint8Array {
   const bytes = new Uint8Array(length);
 
@@ -103,20 +68,17 @@ export function isSecureRandomAvailable(): boolean {
   }
 }
 
-/** UUID v4 tiré de la source d'entropie sécurisée (identifiant d'appareil). */
 export function randomUuid(): string {
   const bytes = secureRandomBytes(16);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variante RFC 4122
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = bytesToHex(bytes);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-// ─── Encodages ──────────────────────────────────────────────────────────────
-
 const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
-/** Base64 standard — implémenté ici car `btoa` n'existe pas sous Hermes. */
+// btoa/atob n'existent pas sous Hermes.
 export function bytesToBase64(bytes: Uint8Array): string {
   let out = '';
   for (let i = 0; i < bytes.length; i += 3) {
@@ -206,19 +168,14 @@ function hexToBytes(hex: string): Uint8Array {
   return out;
 }
 
-// ─── Clés publiques PEM (SPKI) ──────────────────────────────────────────────
-
-/**
- * Préfixe DER d'une clé publique SPKI `id-ecPublicKey` sur `prime256v1`,
- * suivi du point non compressé de 65 octets (0x04 ‖ X ‖ Y).
- */
+// Préfixe DER d'une clé SPKI id-ecPublicKey/prime256v1, suivi du point
+// non compressé de 65 octets (0x04 ‖ X ‖ Y).
 const SPKI_P256_PREFIX = hexToBytes('3059301306072a8648ce3d020106082a8648ce3d030107034200');
 
 function pemBody(pem: string): string {
   return pem.replace(/-----(BEGIN|END)[^-]+-----/g, '').replace(/\s+/g, '');
 }
 
-/** Encode un point public P-256 (65 octets) en PEM SPKI, format attendu par .NET. */
 export function publicKeyToPem(publicKey: Uint8Array): string {
   const der = new Uint8Array(SPKI_P256_PREFIX.length + publicKey.length);
   der.set(SPKI_P256_PREFIX, 0);
@@ -227,11 +184,8 @@ export function publicKeyToPem(publicKey: Uint8Array): string {
   return `-----BEGIN PUBLIC KEY-----\n${b64}\n-----END PUBLIC KEY-----`;
 }
 
-/**
- * Extrait le point non compressé d'une clé publique PEM SPKI. Le point est en
- * fin de structure DER : on le repère par son marqueur 0x04 sur 65 octets,
- * ce qui évite d'écrire un parseur ASN.1 complet pour une courbe unique.
- */
+// Le point est en fin de structure DER : on le repère par son marqueur 0x04,
+// ce qui évite un parseur ASN.1 complet pour une courbe unique.
 export function pemToPublicKey(pem: string): Uint8Array {
   const der = base64ToBytes(pemBody(pem));
   const point = der.subarray(der.length - 65);
@@ -241,24 +195,13 @@ export function pemToPublicKey(pem: string): Uint8Array {
   return point;
 }
 
-// ─── Identité de l'appareil ─────────────────────────────────────────────────
-
 export interface DeviceKeyPair {
-  /** Clé privée en hexadécimal — à ne stocker QUE dans le stockage sécurisé. */
   privateKeyHex: string;
-  /** Clé publique au format PEM SPKI, transmise au serveur à l'enrôlement. */
   publicKeyPem: string;
 }
 
-/**
- * Génère l'identité cryptographique du terminal.
- *
- * L'entropie est fournie explicitement (48 octets, réduits modulo l'ordre de
- * la courbe par @noble/curves) plutôt que laissée au `crypto` global : sous
- * Hermes celui-ci est absent, et une génération silencieusement dégradée
- * produirait une clé devinable. Lève `SecureRandomUnavailableError` si aucune
- * source sûre n'est disponible.
- */
+// Entropie fournie explicitement : sous Hermes le crypto global peut manquer,
+// et une génération silencieusement dégradée produirait une clé devinable.
 export function generateDeviceKeyPair(): DeviceKeyPair {
   const secretKey = p256.utils.randomSecretKey(secureRandomBytes(48));
   return {
@@ -267,23 +210,17 @@ export function generateDeviceKeyPair(): DeviceKeyPair {
   };
 }
 
-/**
- * Signe un message avec la clé privée du terminal (ECDSA P-256 / SHA-256).
- * Retourne la signature brute r‖s de 64 octets — format `IeeeP1363` attendu
- * par `ECDsa.VerifyData` côté .NET.
- */
+/** Signature brute r‖s de 64 octets — format IeeeP1363 attendu par .NET. */
 export function signWithDeviceKey(privateKeyHex: string, message: string): Uint8Array {
   return p256.sign(utf8ToBytes(message), hexToBytes(privateKeyHex), { prehash: true });
 }
-
-// ─── Vérification des JWS émis par le serveur ───────────────────────────────
 
 export interface JwsHeader {
   alg?: string;
   kid?: string;
 }
 
-/** Lit l'en-tête d'un JWS sans vérifier sa signature (pour choisir le `kid`). */
+/** Lit l'en-tête d'un JWS sans vérifier la signature (choix du `kid`). */
 export function readJwsHeader(token: string): JwsHeader | null {
   const [rawHeader] = token.split('.');
   if (!rawHeader) return null;
@@ -294,11 +231,7 @@ export function readJwsHeader(token: string): JwsHeader | null {
   }
 }
 
-/**
- * Vérifie un JWS compact signé ES256 et retourne sa charge utile décodée.
- * Retourne `null` dès que la signature ne correspond pas — c'est ce contrôle
- * qui permet de rejeter un QR forgé sans joindre le serveur.
- */
+/** Vérifie un JWS compact ES256 ; `null` si la signature ne correspond pas. */
 export function verifyJws<T>(token: string, publicKeyPem: string): T | null {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
