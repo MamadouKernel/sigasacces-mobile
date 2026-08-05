@@ -49,7 +49,7 @@ export function EnrolementScreen() {
   };
 
   const onQrScanned = ({ data }: { data: string }) => {
-    // la caméra émet en continu tant que le QR est dans le cadre
+    // la caméra ré-émet tant que le QR reste dans le cadre
     const now = Date.now();
     if (busy || now - lastScanAt.current < 2500) return;
     lastScanAt.current = now;

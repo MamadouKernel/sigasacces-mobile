@@ -1,9 +1,8 @@
-import { MIN, durSince, fmt, fmtDur } from '@/lib/time';
+import { durSince, fmt } from '@/lib/time';
 import type { Direction, JournalEntry, OfflineVisit, Verdict, VerdictCode } from '@/types/domain';
 
 // Décision du mode dégradé uniquement : en nominal le verdict vient de
-// POST /api/scan. Les bornes de fenêtre sont celles calculées par le serveur ;
-// toute validation locale part en file de resync à la reconnexion.
+// POST /api/scan. Toute validation prononcée ici part en file de resync.
 
 export interface ScanContext {
   direction: Direction;
@@ -77,7 +76,7 @@ export function decideListExpired(ctx: ScanContext): ScanDecision {
   };
 }
 
-export function decideInvalidSignature(ctx: ScanContext, degraded: boolean): ScanDecision {
+export function decideInvalidSignature(ctx: ScanContext): ScanDecision {
   return {
     verdict: {
       kind: 'no',
@@ -86,21 +85,14 @@ export function decideInvalidSignature(ctx: ScanContext, degraded: boolean): Sca
       who: 'Signature non vérifiable',
       detail: 'Diriger le porteur vers le poste de garde',
       reason: 'SIGNATURE INVALIDE — QR ALTÉRÉ',
-      degraded,
+      degraded: true,
       securityEvent: true,
     },
     patch: {},
-    journal: {
-      t: ctx.now,
-      nom: 'QR inconnu',
-      agent: ctx.agentId,
-      ok: false,
-      deg: degraded,
+    journal: entry(ctx, 'QR inconnu', {
       sec: true,
-      det:
-        'Signature cryptographique invalide — contenu du QR altéré ou forgé' +
-        (degraded ? ' (détecté hors ligne : la vérification ne requiert pas le serveur)' : ''),
-    },
+      det: 'Signature cryptographique invalide — contenu du QR altéré ou forgé (détecté hors ligne : la vérification ne requiert pas le serveur)',
+    }),
   };
 }
 
@@ -241,9 +233,3 @@ export function decideOffline(visit: OfflineVisit, ctx: ScanContext): ScanDecisi
     journal: entry(ctx, visit.nom, { ok: true, det: `${det} · à resynchroniser` }),
   };
 }
-
-export function overdueLabel(overstayMinutes: number | undefined): string {
-  return overstayMinutes && overstayMinutes > 0 ? ` · dépassement +${fmtDur(overstayMinutes)}` : '';
-}
-
-export { MIN };

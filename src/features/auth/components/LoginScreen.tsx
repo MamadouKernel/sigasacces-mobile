@@ -56,7 +56,6 @@ export function LoginScreen() {
   const submit = async () => {
     if (!canSubmit) return;
     const res = await login(matricule.trim(), pin);
-    // PIN effacé quoi qu'il arrive
     setPin('');
     if (!res.ok) {
       setError(res.error ?? 'Prise de poste impossible');

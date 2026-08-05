@@ -59,15 +59,6 @@ export function secureRandomBytes(length: number): Uint8Array {
   throw new SecureRandomUnavailableError();
 }
 
-export function isSecureRandomAvailable(): boolean {
-  try {
-    secureRandomBytes(1);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function randomUuid(): string {
   const bytes = secureRandomBytes(16);
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
@@ -108,10 +99,6 @@ export function base64ToBytes(input: string): Uint8Array {
     if (clean[i + 3]) out[o++] = n & 0xff;
   }
   return out.subarray(0, o);
-}
-
-export function bytesToBase64Url(bytes: Uint8Array): string {
-  return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 export function base64UrlToBytes(input: string): Uint8Array {

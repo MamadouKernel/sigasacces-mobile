@@ -67,7 +67,7 @@ export async function setItem(key: string, value: string): Promise<void> {
       await store.setItemAsync(key, value);
       return;
     } catch {
-      // repli mémoire ci-dessous
+      // repli mémoire
     }
   }
   memory.set(key, value);
@@ -79,7 +79,7 @@ export async function deleteItem(key: string): Promise<void> {
     try {
       globalThis.localStorage?.removeItem(key);
     } catch {
-      // rien à supprimer
+      // clé déjà absente
     }
     return;
   }
@@ -88,7 +88,7 @@ export async function deleteItem(key: string): Promise<void> {
     try {
       await store.deleteItemAsync(key);
     } catch {
-      // rien à supprimer
+      // clé déjà absente
     }
   }
 }

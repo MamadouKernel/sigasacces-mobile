@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
@@ -26,22 +26,16 @@ export function ConfigPosteScreen() {
   const [error, setError] = useState<string | null>(null);
   const [checkpoint, setCheckpoint] = useState<SiteRef | null>(null);
 
-  const load = React.useCallback(async () => {
+  const load = useCallback(async () => {
     const res = await loadPostOptions();
     setError(res.ok ? null : (res.error ?? 'Configuration du site indisponible.'));
   }, [loadPostOptions]);
 
-  // pas d'écriture d'état si l'agent a quitté l'écran pendant l'appel réseau
   useEffect(() => {
-    let alive = true;
     void (async () => {
-      const res = await loadPostOptions();
-      if (alive) setError(res.ok ? null : (res.error ?? 'Configuration du site indisponible.'));
+      await load();
     })();
-    return () => {
-      alive = false;
-    };
-  }, [loadPostOptions]);
+  }, [load]);
 
   const checkpoints = siteConfig?.checkpoints ?? [];
   const multiSite = sites.length > 1 && !enrollment?.siteId;
@@ -56,7 +50,7 @@ export function ConfigPosteScreen() {
   const submit = () => {
     if (!checkpoint) return;
     configurePost(checkpoint);
-    // liste signée chargée tout de suite : c'est elle qui validera hors ligne
+    // liste signée chargée dès l'ouverture : c'est elle qui validera hors ligne
     void refreshDayList();
     router.replace('/scanner');
   };

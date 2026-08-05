@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 
 import { colors, radius, spacing } from '@/theme/tokens';
 
-type Variant = 'primary' | 'accent' | 'outline' | 'danger';
+type Variant = 'primary' | 'accent';
 
 interface Props {
   label: string;
@@ -49,8 +49,4 @@ const styles = StyleSheet.create({
   primaryLabel: { color: '#fff' },
   accent: { backgroundColor: colors.amber },
   accentLabel: { color: colors.navy, fontWeight: '700' },
-  outline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.line },
-  outlineLabel: { color: colors.text },
-  danger: { backgroundColor: colors.no },
-  dangerLabel: { color: '#fff' },
 });

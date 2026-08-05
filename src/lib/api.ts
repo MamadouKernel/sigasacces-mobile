@@ -1,8 +1,7 @@
 import type { AccessMode, Direction, VerdictCode, VisitStatus } from '@/types/domain';
 
 // Le contrat OpenAPI ne type aucune réponse. Les parseurs ci-dessous acceptent
-// plusieurs graphies et échouent via ContractError ; les hypothèses sont
-// marquées CONTRAT À CONFIRMER (voir docs/besoins-api-app-agent.md).
+// plusieurs graphies et échouent via ContractError.
 
 export const apiConfig = {
   baseUrl: process.env.EXPO_PUBLIC_API_URL?.trim() || 'https://api.sigasacces.com',
@@ -29,12 +28,6 @@ export function setAgentToken(token: string | null) {
 
 export function setSiteId(id: string | null) {
   siteId = id;
-}
-
-export function clearSession() {
-  deviceToken = null;
-  agentToken = null;
-  siteId = null;
 }
 
 export class ApiError extends Error {
@@ -182,17 +175,9 @@ function pickArray(source: Json, ...keys: string[]): Json[] {
   return [];
 }
 
-export interface HealthResult {
-  status: string;
-  serverTimeUtc?: number;
-}
-
-export interface PublicKeysResult {
-  keys: Record<string, string>;
-  currentKid: string;
-}
-
-function parsePublicKeys(raw: unknown): PublicKeysResult {
+// Clés de vérification indexées par `kid` : les clés retirées restent
+// nécessaires pour les QR émis avant la dernière rotation.
+function parsePublicKeys(raw: unknown): Record<string, string> {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/keys/public', raw);
 
@@ -206,7 +191,7 @@ function parsePublicKeys(raw: unknown): PublicKeysResult {
     const pem = pickString(retired, 'publicKeyPem', 'pem', 'publicKey');
     if (kid && pem) keys[kid] = pem;
   }
-  return { keys, currentKid };
+  return keys;
 }
 
 export interface DeviceActivationRequest {
@@ -225,7 +210,6 @@ export interface DeviceActivationResult {
 function parseDeviceActivation(raw: unknown): DeviceActivationResult {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/device-enrollments/activate', raw);
-  // CONTRAT À CONFIRMER : nom du champ portant le jeton d'appareil.
   const token = pickString(data, 'token', 'accessToken', 'deviceToken', 'apiKey', 'terminalKey');
   if (!token) throw new ContractError('/api/device-enrollments/activate — jeton', raw);
   return {
@@ -247,7 +231,6 @@ function parseShiftStart(raw: unknown, fallbackMatricule: string): ShiftStartRes
   if (!data) throw new ContractError('/api/agent/shift/start', raw);
   const agent = asObject(data.agent) ?? data;
   return {
-    // CONTRAT À CONFIRMER : jeton de session agent (peut être absent).
     token: pickString(data, 'token', 'accessToken', 'jwt'),
     matricule: pickString(agent, 'matricule', 'badge', 'agentId') ?? fallbackMatricule,
     nom: pickString(agent, 'nom', 'name', 'displayName', 'fullName'),
@@ -263,9 +246,6 @@ export interface SiteRef {
 export interface SiteConfig {
   siteLabel?: string;
   checkpoints: SiteRef[];
-  windowBeforeMin?: number;
-  windowAfterMin?: number;
-  offlineListTtlHours?: number;
 }
 
 function parseSiteRef(raw: Json): SiteRef | null {
@@ -289,16 +269,12 @@ function parseSites(raw: unknown): SiteRef[] {
 function parseSiteConfig(raw: unknown): SiteConfig {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/site/config', raw);
-  const params = asObject(data.params) ?? data;
   const checkpoints = pickArray(data, 'postes', 'checkpoints', 'points')
     .map(parseSiteRef)
     .filter((site): site is SiteRef => site !== null);
   return {
     siteLabel: pickString(data, 'siteLabel', 'label', 'nom', 'name'),
     checkpoints,
-    windowBeforeMin: pickNumber(params, 'fenetreAvantMin', 'windowBeforeMinutes'),
-    windowAfterMin: pickNumber(params, 'fenetreApresMin', 'windowAfterMinutes'),
-    offlineListTtlHours: pickNumber(params, 'ttlListeLocaleHeures', 'offlineListTtlHours'),
   };
 }
 
@@ -345,11 +321,10 @@ function parseExpectedVisits(raw: unknown): ExpectedVisit[] {
 export interface OfflineList {
   jws?: string;
   visits: ExpectedVisit[];
-  generatedAt?: number;
   expiresAt?: number;
 }
 
-// CONTRAT À CONFIRMER : liste servie en JWS compact brut, ou en objet JSON ?
+// La liste arrive soit en JWS compact brut, soit enveloppée dans un objet JSON.
 function parseOfflineListEnvelope(raw: unknown): { jws?: string; payload: unknown } {
   if (typeof raw === 'string') return { jws: raw, payload: undefined };
   const data = asObject(raw);
@@ -365,7 +340,6 @@ export function parseOfflineListPayload(raw: unknown, jws?: string): OfflineList
   return {
     jws,
     visits: parseExpectedVisits(data),
-    generatedAt: pickDate(data, 'generatedAtUtc', 'generatedAt'),
     expiresAt: pickDate(data, 'expiresAtUtc', 'expiresAt'),
   };
 }
@@ -432,16 +406,13 @@ function parseResync(raw: unknown, sent: number): ResyncResult {
 }
 
 export const api = {
-  async health(): Promise<HealthResult> {
-    const raw = await request<unknown>('GET', '/api/health');
-    const data = asObject(raw) ?? {};
-    return {
-      status: pickString(data, 'status') ?? 'ok',
-      serverTimeUtc: pickDate(data, 'serverTimeUtc', 'utc'),
-    };
+  // Seul l'aboutissement de l'appel compte : c'est lui qui distingue « réseau
+  // présent » de « serveur joignable ».
+  async health(): Promise<void> {
+    await request<unknown>('GET', '/api/health');
   },
 
-  async publicKeys(): Promise<PublicKeysResult> {
+  async publicKeys(): Promise<Record<string, string>> {
     return parsePublicKeys(await request<unknown>('GET', '/api/keys/public'));
   },
 
@@ -472,7 +443,6 @@ export const api = {
     return parseOfflineListEnvelope(await request<unknown>('GET', '/api/agent/offline-list'));
   },
 
-  // L'arbre de décision vit côté serveur : on affiche le verdict sans le recalculer.
   async scan(
     signedQrPayload: string,
     direction: Direction,

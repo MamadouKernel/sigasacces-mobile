@@ -20,7 +20,6 @@ export type VerdictCode =
   | 'DENIED_OfflineListExpired'
   | 'DENIED_NotInOfflineList'
   // incident technique, pas un refus d'accès
-  | 'SERVER_UNREACHABLE'
   | 'SERVER_ERROR';
 
 export type VerdictKind = 'ok' | 'out' | 'no';

@@ -29,7 +29,7 @@ export function Viewfinder({ onScanned, paused }: Props) {
   }, [scanline]);
 
   const handleScan = ({ data }: { data: string }) => {
-    // la caméra émet en continu tant que le QR est dans le cadre
+    // la caméra ré-émet tant que le QR reste dans le cadre
     const now = Date.now();
     if (paused || now - lastScanAt.current < 2000) return;
     lastScanAt.current = now;

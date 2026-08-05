@@ -33,8 +33,6 @@ function statusOf(visit: OfflineVisit): { label: string; color: string } {
   };
 }
 
-// Données minimales (ni motif, ni coordonnées) ; la recherche par nom couvre
-// le cas du visiteur sans QR.
 export function DayListSheet({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const visits = useScanStore((s) => s.visits);

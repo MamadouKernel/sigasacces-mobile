@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { create } from 'zustand';
 
-import { allPublicKeys, publicKeyFor, useEnrollmentStore } from '@/features/auth/enrollment.store';
+import { allPublicKeys, publicKeyFor } from '@/features/auth/enrollment.store';
 import { useAuthStore } from '@/features/auth/auth.store';
 import {
   NetworkError,
@@ -94,14 +94,14 @@ function verdictFromServer(result: ScanResult): Verdict {
 }
 
 // Incident technique — présenté comme tel, pas comme un refus d'accès.
-function verdictFromFailure(code: VerdictCode, detail: string): Verdict {
+function verdictFromFailure(detail: string): Verdict {
   return {
     kind: 'no',
-    code,
+    code: 'SERVER_ERROR',
     title: 'VÉRIFICATION IMPOSSIBLE',
     who: 'Contrôle non abouti',
     detail,
-    reason: code === 'SERVER_UNREACHABLE' ? 'SERVEUR INJOIGNABLE' : 'ERREUR SERVEUR',
+    reason: 'ERREUR SERVEUR',
     degraded: false,
     securityEvent: false,
   };
@@ -163,7 +163,6 @@ export const useScanStore = create<ScanState>((set, get) => ({
   busy: false,
 
   hydrate: async () => {
-    // La liste signée et la file doivent survivre au redémarrage du terminal.
     const [rawList, rawPending] = await Promise.all([
       getItem(OFFLINE_LIST_KEY),
       getItem(PENDING_SCANS_KEY),
@@ -226,7 +225,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
           // bascule en dégradé, le même scan est repris hors ligne ci-dessous
           set({ busy: false, degraded: true });
         } else {
-          const verdict = verdictFromFailure('SERVER_ERROR', errorMessage(err));
+          const verdict = verdictFromFailure(errorMessage(err));
           feedback('no', state.haptics);
           set((s) => ({
             busy: false,
@@ -244,8 +243,8 @@ export const useScanStore = create<ScanState>((set, get) => ({
       }
     }
 
-    // Mode dégradé : la signature se vérifie sans serveur, un QR forgé est
-    // rejeté même pendant une coupure.
+    // Mode dégradé : la signature se vérifie sans serveur, un QR forgé reste
+    // rejeté pendant une coupure.
     const current = get();
 
     const kid = readJwsHeader(payload)?.kid;
@@ -258,7 +257,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
 
     let decision: ScanDecision;
     if (!claims) {
-      decision = decideInvalidSignature(ctx, true);
+      decision = decideInvalidSignature(ctx);
     } else if (current.ttlExpired) {
       decision = decideListExpired(ctx);
     } else {
@@ -428,8 +427,4 @@ export function ttlLabel(expiresAt: number | null, expired: boolean): string {
   if (expired || !expiresAt) return 'EXPIRÉ';
   if (Date.now() >= expiresAt) return 'EXPIRÉ';
   return durSince(Date.now(), expiresAt);
-}
-
-export function canVerifyOffline(): boolean {
-  return Object.keys(useEnrollmentStore.getState().enrollment?.publicKeys ?? {}).length > 0;
 }

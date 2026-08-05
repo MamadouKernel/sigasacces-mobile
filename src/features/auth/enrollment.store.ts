@@ -33,10 +33,9 @@ export interface StoredEnrollment {
   publicKeys: Record<string, string>;
 }
 
-// CONTRAT À CONFIRMER : message couvert par proofSignature et son encodage.
-// Cinq hypothèses testées contre la prod, toutes rejetées (voir
-// docs/besoins-api-app-agent.md §Q1). Seules ces deux fonctions sont à
-// corriger quand la spec arrivera.
+// Le serveur ne publie pas le message couvert par proofSignature ni son
+// encodage. Cinq hypothèses ont été testées contre la prod, toutes rejetées ;
+// seules ces deux fonctions sont à corriger quand la spec arrivera.
 function buildProofMessage(ticket: string, deviceInstanceId: string): string {
   return `${ticket}.${deviceInstanceId}`;
 }
@@ -127,12 +126,13 @@ export const useEnrollmentStore = create<EnrollmentState>((set, get) => ({
       setDeviceToken(activation.token);
       setSiteId(activation.siteId ?? null);
 
-      // Sans les clés publiques, le mode dégradé ne peut rien valider.
+      // Sans les clés publiques, le mode dégradé ne peut rien valider ; elles
+      // restent récupérables plus tard, l'échec ne bloque pas la mise en service.
       let publicKeys: Record<string, string> = {};
       try {
-        publicKeys = (await api.publicKeys()).keys;
+        publicKeys = await api.publicKeys();
       } catch {
-        // récupérables plus tard, ne bloque pas la mise en service
+        publicKeys = {};
       }
 
       const enrollment: StoredEnrollment = {
@@ -164,7 +164,7 @@ export const useEnrollmentStore = create<EnrollmentState>((set, get) => ({
     const current = get().enrollment;
     if (!current) return;
     try {
-      const { keys } = await api.publicKeys();
+      const keys = await api.publicKeys();
       const enrollment = { ...current, publicKeys: { ...current.publicKeys, ...keys } };
       set({ enrollment });
       await setItem(ENROLLMENT_KEY, JSON.stringify(enrollment));
