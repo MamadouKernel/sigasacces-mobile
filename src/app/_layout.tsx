@@ -1,18 +1,32 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect } from 'react';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { useEnrollmentStore } from '@/features/auth/enrollment.store';
+import { useScanStore } from '@/features/scan/scan.store';
+import { colors } from '@/theme/tokens';
 
-SplashScreen.preventAutoHideAsync();
+export default function RootLayout() {
+  const hydrate = useEnrollmentStore((s) => s.hydrate);
+  const hydrateScans = useScanStore((s) => s.hydrate);
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  // Une coupure réseau peut survenir terminal éteint : l'enrôlement, la liste
+  // signée du jour et les scans en attente de resynchronisation sont donc
+  // rechargés depuis le stockage sécurisé avant tout affichage.
+  useEffect(() => {
+    void hydrate();
+    void hydrateScans();
+  }, [hydrate, hydrateScans]);
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <>
+      <StatusBar style="light" />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.bg },
+        }}
+      />
+    </>
   );
 }

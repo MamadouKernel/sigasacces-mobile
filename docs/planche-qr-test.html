@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOVACCÈS — Planche de QR codes de test</title>
+<style>
+:root{--ink:#10161D;--muted:#6B7784;--line:#DCE0DB;--navy:#0E2A3A;--amber:#F5A300}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#F4F5F2;color:var(--ink);padding:24px}
+header{max-width:1100px;margin:0 auto 20px}
+h1{font-size:24px;color:var(--navy)}
+h1 span{color:var(--amber)}
+.sub{font-size:13px;color:var(--muted);margin-top:4px;line-height:1.5}
+.grid{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;text-align:center;break-inside:avoid;page-break-inside:avoid}
+.card.copie{border:2px dashed var(--amber);background:#FFFDF6}
+.tag{display:inline-block;color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.08em;padding:3px 10px;border-radius:3px;margin-bottom:10px}
+.qr{width:190px;margin:0 auto}
+.qr svg{width:100%;height:auto;display:block}
+.nom{font-size:16px;font-weight:700;margin-top:8px}
+.ent{font-size:12px;color:var(--muted);margin-top:2px}
+.mono{font-family:ui-monospace,monospace}
+.attendu{font-size:11.5px;color:#3C4854;margin-top:10px;text-align:left;background:#F0F4F6;border:1px solid var(--line);border-radius:6px;padding:8px 10px;line-height:1.5}
+@media print{body{background:#fff;padding:10px}.grid{gap:10px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>NOV<span>ACCÈS</span> — Planche de QR codes de test</h1>
+  <div class="sub">À afficher à l'écran ou imprimer, puis scanner avec l'app agent.
+  Relancez l'app pour rejouer les scénarios.</div>
+</header>
+<div class="grid">
+    <div class="card" style="border:2px solid var(--navy)">
+      <div class="tag" style="background:#0E2A3A">CONFIG TERMINAL</div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 53 53" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h53v53H0z"/><path stroke="#10161D" d="M4 4.5h7m7 0h2m3 0h1m1 0h1m3 0h1m2 0h3m5 0h1m1 0h7M4 5.5h1m5 0h1m2 0h1m1 0h2m2 0h1m4 0h5m1 0h2m7 0h1m2 0h1m5 0h1M4 6.5h1m1 0h3m1 0h1m1 0h4m3 0h4m4 0h2m2 0h5m1 0h1m1 0h1m2 0h1m1 0h3m1 0h1M4 7.5h1m1 0h3m1 0h1m1 0h1m1 0h5m1 0h7m1 0h1m5 0h2m3 0h2m1 0h1m1 0h3m1 0h1M4 8.5h1m1 0h3m1 0h1m1 0h1m2 0h3m6 0h6m1 0h10m1 0h1m1 0h3m1 0h1M4 9.5h1m5 0h1m1 0h1m2 0h4m3 0h1m1 0h1m3 0h1m1 0h2m3 0h2m5 0h1m5 0h1M4 10.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M12 11.5h2m2 0h2m2 0h3m1 0h1m3 0h1m1 0h3m1 0h1m1 0h2M4 12.5h1m1 0h5m4 0h1m1 0h2m3 0h8m3 0h1m1 0h1m1 0h2m3 0h5M4 13.5h1m1 0h1m1 0h2m1 0h1m7 0h1m1 0h2m4 0h1m1 0h1m2 0h4m4 0h2m1 0h1m4 0h1M4 14.5h1m1 0h2m1 0h4m1 0h1m1 0h5m4 0h1m2 0h4m6 0h3m1 0h1m2 0h2M4 15.5h2m2 0h1m3 0h3m2 0h1m1 0h1m3 0h2m3 0h1m3 0h2m2 0h1m7 0h5M4 16.5h2m1 0h1m2 0h2m2 0h3m1 0h2m2 0h1m1 0h3m1 0h2m3 0h1m1 0h1m1 0h1m1 0h3m1 0h1m2 0h1m1 0h1M5 17.5h1m1 0h1m1 0h1m1 0h2m2 0h1m1 0h1m2 0h1m2 0h3m1 0h1m1 0h1m2 0h4m1 0h1m5 0h2m1 0h1M5 18.5h2m1 0h1m1 0h3m4 0h1m2 0h1m3 0h1m2 0h4m1 0h2m2 0h3m1 0h1m1 0h2m2 0h2M5 19.5h1m2 0h1m2 0h2m1 0h1m2 0h4m1 0h2m1 0h1m4 0h3m1 0h3m1 0h1m1 0h7M4 20.5h1m1 0h2m1 0h2m3 0h1m2 0h1m2 0h4m1 0h2m1 0h2m3 0h3m1 0h2m2 0h3m1 0h1m1 0h2M4 21.5h1m1 0h1m5 0h1m2 0h3m2 0h2m1 0h3m1 0h1m3 0h2m1 0h3m3 0h2m2 0h1m2 0h2M8 22.5h5m1 0h1m1 0h1m1 0h4m2 0h5m1 0h1m1 0h1m2 0h4m3 0h1m1 0h2m1 0h1M4 23.5h1m1 0h2m7 0h1m1 0h2m8 0h2m2 0h2m3 0h1m1 0h1m3 0h2m1 0h2M4 24.5h2m1 0h6m1 0h3m2 0h4m1 0h6m3 0h3m2 0h1m1 0h5m2 0h1M6 25.5h3m3 0h3m4 0h1m3 0h2m3 0h2m1 0h2m1 0h2m3 0h2m3 0h1m1 0h1M4 26.5h3m1 0h1m1 0h1m1 0h1m4 0h1m1 0h3m2 0h1m1 0h1m1 0h2m1 0h1m3 0h6m1 0h1m1 0h1m2 0h1M4 27.5h1m2 0h2m3 0h1m5 0h1m4 0h2m3 0h2m2 0h1m1 0h1m1 0h2m2 0h1m3 0h5M4 28.5h2m1 0h7m3 0h1m2 0h2m2 0h5m4 0h1m1 0h1m2 0h1m1 0h6M4 29.5h1m4 0h1m2 0h2m4 0h2m2 0h2m1 0h5m1 0h4m1 0h1m5 0h1m3 0h3M4 30.5h3m2 0h4m1 0h1m1 0h4m2 0h1m3 0h1m3 0h2m3 0h1m1 0h2m1 0h1m2 0h1m1 0h1m1 0h1M4 31.5h1m2 0h3m1 0h2m7 0h1m3 0h2m1 0h2m2 0h2m1 0h1m1 0h2m1 0h1m2 0h2m1 0h4M5 32.5h3m1 0h2m1 0h1m10 0h1m1 0h1m2 0h3m2 0h1m1 0h1m1 0h1m2 0h2m2 0h1m1 0h2M4 33.5h2m3 0h1m2 0h1m4 0h3m1 0h1m3 0h3m1 0h1m2 0h3m1 0h1m3 0h2m4 0h1m1 0h1M5 34.5h2m1 0h5m1 0h4m1 0h1m1 0h1m2 0h1m2 0h1m2 0h2m8 0h1m4 0h1m1 0h1M4 35.5h1m2 0h3m3 0h1m1 0h2m3 0h3m1 0h1m3 0h1m2 0h2m1 0h1m1 0h1m1 0h1m1 0h1m1 0h3m1 0h2M4 36.5h1m1 0h2m1 0h2m1 0h3m1 0h4m3 0h1m4 0h1m1 0h2m3 0h1m1 0h4m2 0h3M4 37.5h1m6 0h1m3 0h4m1 0h1m2 0h2m1 0h1m1 0h1m3 0h1m1 0h3m2 0h2m2 0h1m1 0h4M8 38.5h1m1 0h1m2 0h1m1 0h2m2 0h1m2 0h1m2 0h1m4 0h2m5 0h2m2 0h2m2 0h3M5 39.5h4m2 0h2m1 0h3m2 0h3m1 0h1m1 0h2m1 0h5m1 0h1m1 0h1m2 0h2m1 0h5M4 40.5h1m2 0h2m1 0h3m5 0h1m5 0h8m3 0h1m1 0h1m2 0h6m1 0h1M12 41.5h1m1 0h1m1 0h1m1 0h1m4 0h2m3 0h1m2 0h1m2 0h2m4 0h1m3 0h1m1 0h2M4 42.5h7m2 0h1m5 0h1m1 0h4m1 0h1m1 0h3m1 0h1m2 0h1m1 0h4m1 0h1m1 0h2m1 0h1M4 43.5h1m5 0h1m1 0h2m1 0h1m1 0h5m2 0h1m3 0h2m1 0h8m1 0h1m3 0h3m1 0h1M4 44.5h1m1 0h3m1 0h1m1 0h1m4 0h3m2 0h1m1 0h6m1 0h1m1 0h3m4 0h5M4 45.5h1m1 0h3m1 0h1m1 0h1m1 0h2m3 0h2m1 0h1m1 0h1m3 0h2m1 0h1m1 0h4m2 0h1m3 0h3m1 0h2M4 46.5h1m1 0h3m1 0h1m1 0h1m6 0h1m1 0h1m4 0h2m4 0h2m1 0h7m1 0h1m1 0h1m1 0h1M4 47.5h1m5 0h1m2 0h3m1 0h1m3 0h1m2 0h1m2 0h1m2 0h3m1 0h2m2 0h2m4 0h1m1 0h4M4 48.5h7m1 0h2m3 0h3m2 0h2m3 0h3m3 0h3m1 0h2m1 0h8"/></svg>
+</div>
+      <div class="nom">Enrôlement du terminal</div>
+      <div class="ent">Admin Sigasécurité · <span class="mono">tk_demo_sicopa_001</span></div>
+      <div class="attendu">À scanner sur l'écran « Enrôlement du terminal » (première utilisation).</div>
+    </div>
+
+    <div class="card">
+      <div class="tag" style="background:#0D9142">CAS NOMINAL</div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h25v25H0z"/><path stroke="#10161D" d="M2 2.5h7m1 0h3m1 0h1m1 0h7M2 3.5h1m5 0h1m3 0h1m3 0h1m5 0h1M2 4.5h1m1 0h3m1 0h1m1 0h1m2 0h1m2 0h1m1 0h3m1 0h1M2 5.5h1m1 0h3m1 0h1m3 0h3m1 0h1m1 0h3m1 0h1M2 6.5h1m1 0h3m1 0h1m2 0h1m2 0h1m1 0h1m1 0h3m1 0h1M2 7.5h1m5 0h1m1 0h3m3 0h1m5 0h1M2 8.5h7m1 0h1m1 0h1m1 0h1m1 0h7M12 9.5h2M2 10.5h1m1 0h1m3 0h2m3 0h2m2 0h1m2 0h1m1 0h1M2 11.5h3m1 0h2m1 0h2m1 0h1m2 0h1m1 0h1m1 0h2m1 0h1M4 12.5h1m2 0h2m1 0h1m1 0h1m2 0h5m1 0h1M3 13.5h2m2 0h1m1 0h1m2 0h1m1 0h1m2 0h1m1 0h1m2 0h1M2 14.5h8m1 0h2m2 0h5m1 0h2M10 15.5h4m1 0h2m2 0h2M2 16.5h7m1 0h1m2 0h3m1 0h3M2 17.5h1m5 0h1m2 0h1m1 0h1m1 0h2m4 0h1M2 18.5h1m1 0h3m1 0h1m2 0h8m1 0h1m1 0h1M2 19.5h1m1 0h3m1 0h1m3 0h1m5 0h2M2 20.5h1m1 0h3m1 0h1m1 0h1m1 0h1m3 0h4m1 0h2M2 21.5h1m5 0h1m5 0h1m2 0h2m1 0h1m1 0h1M2 22.5h7m1 0h1m1 0h1m3 0h2m1 0h4"/></svg>
+</div>
+      <div class="nom">Jean-Marc Kouassi</div>
+      <div class="ent">CFAO Motors · <span class="mono">NV-2207-015</span></div>
+      <div class="attendu">Entrée → ACCÈS AUTORISÉ · Sortie → SORTIE ENREGISTRÉE.</div>
+    </div>
+
+    <div class="card copie">
+      <div class="tag" style="background:#F5A300">COPIE VOLÉE</div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h25v25H0z"/><path stroke="#10161D" d="M2 2.5h7m1 0h3m1 0h1m1 0h7M2 3.5h1m5 0h1m3 0h1m3 0h1m5 0h1M2 4.5h1m1 0h3m1 0h1m1 0h1m2 0h1m2 0h1m1 0h3m1 0h1M2 5.5h1m1 0h3m1 0h1m3 0h3m1 0h1m1 0h3m1 0h1M2 6.5h1m1 0h3m1 0h1m2 0h1m2 0h1m1 0h1m1 0h3m1 0h1M2 7.5h1m5 0h1m1 0h3m3 0h1m5 0h1M2 8.5h7m1 0h1m1 0h1m1 0h1m1 0h7M12 9.5h2M2 10.5h1m1 0h1m3 0h2m3 0h2m2 0h1m2 0h1m1 0h1M2 11.5h3m1 0h2m1 0h2m1 0h1m2 0h1m1 0h1m1 0h2m1 0h1M4 12.5h1m2 0h2m1 0h1m1 0h1m2 0h5m1 0h1M3 13.5h2m2 0h1m1 0h1m2 0h1m1 0h1m2 0h1m1 0h1m2 0h1M2 14.5h8m1 0h2m2 0h5m1 0h2M10 15.5h4m1 0h2m2 0h2M2 16.5h7m1 0h1m2 0h3m1 0h3M2 17.5h1m5 0h1m2 0h1m1 0h1m1 0h2m4 0h1M2 18.5h1m1 0h3m1 0h1m2 0h8m1 0h1m1 0h1M2 19.5h1m1 0h3m1 0h1m3 0h1m5 0h2M2 20.5h1m1 0h3m1 0h1m1 0h1m1 0h1m3 0h4m1 0h2M2 21.5h1m5 0h1m5 0h1m2 0h2m1 0h1m1 0h1M2 22.5h7m1 0h1m1 0h1m3 0h2m1 0h4"/></svg>
+</div>
+      <div class="nom">Copie volée — QR de Jean-Marc</div>
+      <div class="ent">Capture d’écran du vrai QR · <span class="mono">NV-2207-015</span></div>
+      <div class="attendu">Scanner la copie d’abord, puis l’original → DÉJÀ SUR SITE + alerte.</div>
+    </div>
+
+    <div class="card">
+      <div class="tag" style="background:#CE2F2F">DÉJÀ SUR SITE</div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h25v25H0z"/><path stroke="#10161D" d="M2 2.5h7m1 0h4m2 0h7M2 3.5h1m5 0h1m4 0h2m1 0h1m5 0h1M2 4.5h1m1 0h3m1 0h1m1 0h5m1 0h1m1 0h3m1 0h1M2 5.5h1m1 0h3m1 0h1m2 0h1m2 0h1m1 0h1m1 0h3m1 0h1M2 6.5h1m1 0h3m1 0h1m2 0h2m1 0h1m1 0h1m1 0h3m1 0h1M2 7.5h1m5 0h1m1 0h1m1 0h1m3 0h1m5 0h1M2 8.5h7m1 0h1m1 0h1m1 0h1m1 0h7M11 9.5h1m1 0h1M2 10.5h1m1 0h1m3 0h2m1 0h4m2 0h1m2 0h1m1 0h1M4 11.5h1m1 0h1m2 0h1m1 0h2m4 0h1m1 0h2m1 0h1M5 12.5h1m1 0h2m3 0h1m2 0h5m1 0h1M4 13.5h1m5 0h1m3 0h1m2 0h1m1 0h1m2 0h1M2 14.5h1m2 0h2m1 0h1m2 0h1m3 0h5m1 0h2M10 15.5h1m1 0h2m1 0h2m2 0h2M2 16.5h7m1 0h1m1 0h4m1 0h3M2 17.5h1m5 0h1m2 0h1m1 0h1m1 0h2m4 0h1M2 18.5h1m1 0h3m1 0h1m4 0h6m1 0h1m1 0h1M2 19.5h1m1 0h3m1 0h1m2 0h1m6 0h2M2 20.5h1m1 0h3m1 0h1m1 0h1m1 0h1m3 0h4m1 0h2M2 21.5h1m5 0h1m5 0h1m2 0h2m1 0h1m1 0h1M2 22.5h7m1 0h1m1 0h1m3 0h2m1 0h4"/></svg>
+</div>
+      <div class="nom">Aïcha Diabaté</div>
+      <div class="ent">SGS Inspection · <span class="mono">NV-2207-014</span></div>
+      <div class="attendu">Entrée → DÉJÀ SUR SITE · Sortie → SORTIE ENREGISTRÉE.</div>
+    </div>
+
+    <div class="card">
+      <div class="tag" style="background:#CE2F2F">DÉPASSEMENT</div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h25v25H0z"/><path stroke="#10161D" d="M2 2.5h7m1 0h1m1 0h1m3 0h7M2 3.5h1m5 0h1m1 0h4m2 0h1m5 0h1M2 4.5h1m1 0h3m1 0h1m1 0h4m2 0h1m1 0h3m1 0h1M2 5.5h1m1 0h3m1 0h1m3 0h1m1 0h1m1 0h1m1 0h3m1 0h1M2 6.5h1m1 0h3m1 0h1m1 0h3m1 0h1m1 0h1m1 0h3m1 0h1M2 7.5h1m5 0h1m2 0h4m1 0h1m5 0h1M2 8.5h7m1 0h1m1 0h1m1 0h1m1 0h7M12 9.5h3M2 10.5h1m2 0h8m1 0h2m2 0h1m1 0h3M7 11.5h1m1 0h1m2 0h1m1 0h2m1 0h3M3 12.5h6m1 0h2m4 0h2m1 0h1M2 13.5h1m3 0h2m2 0h2m1 0h1m3 0h2m1 0h1m1 0h1M3 14.5h2m2 0h2m1 0h3m2 0h5m1 0h2M10 15.5h1m2 0h2m4 0h1m1 0h2M2 16.5h7m1 0h1m3 0h5m3 0h1M2 17.5h1m5 0h1m1 0h1m1 0h4m2 0h1m1 0h3M2 18.5h1m1 0h3m1 0h1m1 0h5m1 0h2m2 0h3M2 19.5h1m1 0h3m1 0h1m1 0h1m1 0h3m5 0h1M2 20.5h1m1 0h3m1 0h1m2 0h2m3 0h4m1 0h2M2 21.5h1m5 0h1m2 0h2m2 0h4m2 0h1M2 22.5h7m1 0h4m3 0h1m2 0h2"/></svg>
+</div>
+      <div class="nom">Mariam Cissé</div>
+      <div class="ent">Orange Business · <span class="mono">NV-2207-017</span></div>
+      <div class="attendu">Sortie → SORTIE ENREGISTRÉE avec dépassement (+XX min).</div>
+    </div>
+
+    <div class="card">
+      <div class="tag" style="background:#1B5E9E">ACCÈS 30 JOURS</div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h25v25H0z"/><path stroke="#10161D" d="M2 2.5h7m5 0h1m1 0h7M2 3.5h1m5 0h1m5 0h1m1 0h1m5 0h1M2 4.5h1m1 0h3m1 0h1m1 0h1m1 0h3m1 0h1m1 0h3m1 0h1M2 5.5h1m1 0h3m1 0h1m1 0h1m1 0h3m1 0h1m1 0h3m1 0h1M2 6.5h1m1 0h3m1 0h1m1 0h2m1 0h2m1 0h1m1 0h3m1 0h1M2 7.5h1m5 0h1m1 0h2m2 0h1m1 0h1m5 0h1M2 8.5h7m1 0h1m1 0h1m1 0h1m1 0h7M10 9.5h1m2 0h2M2 10.5h1m1 0h5m3 0h1m1 0h1m1 0h5M2 11.5h5m2 0h1m4 0h1m1 0h1m2 0h1m2 0h1M3 12.5h2m1 0h1m1 0h1m1 0h2m1 0h1m3 0h1m4 0h1M2 13.5h2m1 0h1m1 0h1m1 0h1m9 0h2m1 0h1M3 14.5h2m1 0h3m2 0h3m3 0h1M10 15.5h1m2 0h5m1 0h1M2 16.5h7m5 0h1m1 0h2m3 0h2M2 17.5h1m5 0h1m1 0h2m1 0h5m2 0h2M2 18.5h1m1 0h3m1 0h1m1 0h1m3 0h1m2 0h1m1 0h3M2 19.5h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m2 0h4M2 20.5h1m1 0h3m1 0h1m1 0h2m1 0h1m1 0h1m1 0h1M2 21.5h1m5 0h1m3 0h1m5 0h1m3 0h1M2 22.5h7m1 0h2m1 0h1m1 0h1m1 0h2m1 0h1"/></svg>
+</div>
+      <div class="nom">Fatou Bamba</div>
+      <div class="ent">Bureau Veritas · <span class="mono">NV-2207-016</span></div>
+      <div class="attendu">Jour ouvré → AUTORISÉ · Week-end → JOUR NON OUVRÉ.</div>
+    </div>
+
+    <div class="card">
+      <div class="tag" style="background:#F5A300">TROP TÔT</div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h25v25H0z"/><path stroke="#10161D" d="M2 2.5h7m2 0h4m1 0h7M2 3.5h1m5 0h1m3 0h1m1 0h1m1 0h1m5 0h1M2 4.5h1m1 0h3m1 0h1m1 0h3m1 0h1m1 0h1m1 0h3m1 0h1M2 5.5h1m1 0h3m1 0h1m1 0h1m3 0h1m1 0h1m1 0h3m1 0h1M2 6.5h1m1 0h3m1 0h1m1 0h5m1 0h1m1 0h3m1 0h1M2 7.5h1m5 0h1m1 0h2m2 0h1m1 0h1m5 0h1M2 8.5h7m1 0h1m1 0h1m1 0h1m1 0h7M10 9.5h2m1 0h2M2 10.5h1m1 0h5m2 0h1m2 0h1m1 0h5M3 11.5h2m2 0h1m1 0h2m1 0h1m1 0h2m1 0h3m2 0h1M2 12.5h1m2 0h5m1 0h3m3 0h1m4 0h1M2 13.5h2m1 0h2m3 0h1m1 0h1m6 0h2m1 0h1M3 14.5h2m1 0h1m1 0h2m2 0h2m3 0h1M10 15.5h1m1 0h6m1 0h1M2 16.5h7m3 0h1m1 0h1m1 0h2m3 0h2M2 17.5h1m5 0h1m1 0h1m2 0h5m2 0h2M2 18.5h1m1 0h3m1 0h1m1 0h3m1 0h1m2 0h1m1 0h3M2 19.5h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m2 0h4M2 20.5h1m1 0h3m1 0h1m1 0h1m2 0h1m1 0h1m1 0h1M2 21.5h1m5 0h1m3 0h1m5 0h1m3 0h1M2 22.5h7m1 0h1m1 0h2m1 0h1m1 0h2m1 0h1"/></svg>
+</div>
+      <div class="nom">Aya Touré</div>
+      <div class="ent">Nestlé CI · <span class="mono">NV-2207-019</span></div>
+      <div class="attendu">→ TROP TÔT (RDV dans ~2 h).</div>
+    </div>
+
+    <div class="card">
+      <div class="tag" style="background:#F5A300">TROP TARD</div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h25v25H0z"/><path stroke="#10161D" d="M2 2.5h7m5 0h1m1 0h7M2 3.5h1m5 0h1m3 0h2m2 0h1m5 0h1M2 4.5h1m1 0h3m1 0h1m1 0h1m1 0h1m3 0h1m1 0h3m1 0h1M2 5.5h1m1 0h3m1 0h1m1 0h1m5 0h1m1 0h3m1 0h1M2 6.5h1m1 0h3m1 0h1m1 0h5m1 0h1m1 0h3m1 0h1M2 7.5h1m5 0h1m1 0h1m3 0h1m1 0h1m5 0h1M2 8.5h7m1 0h1m1 0h1m1 0h1m1 0h7M10 9.5h2m1 0h2M2 10.5h1m1 0h5m5 0h1m1 0h5M3 11.5h1m1 0h1m4 0h2m2 0h2m1 0h3m2 0h1M4 12.5h2m2 0h1m2 0h1m1 0h1m3 0h1m4 0h1M6 13.5h1m2 0h1m2 0h1m4 0h1m1 0h2m1 0h1M3 14.5h3m1 0h3m3 0h1m3 0h1M10 15.5h1m2 0h5m1 0h1M2 16.5h7m2 0h2m1 0h1m1 0h2m3 0h2M2 17.5h1m5 0h1m1 0h8m2 0h2M2 18.5h1m1 0h3m1 0h1m1 0h1m3 0h1m2 0h1m2 0h2M2 19.5h1m1 0h3m1 0h1m1 0h2m2 0h1m2 0h2M2 20.5h1m1 0h3m1 0h1m1 0h4m1 0h1m1 0h1m1 0h1M2 21.5h1m5 0h1m2 0h2m5 0h3m1 0h1M2 22.5h7m1 0h4m1 0h1m1 0h2m1 0h1"/></svg>
+</div>
+      <div class="nom">Issa Ouattara</div>
+      <div class="ent">Trans. Ouattara & Fils · <span class="mono">NV-2107-009</span></div>
+      <div class="attendu">→ HORS FENÊTRE (RDV manqué de la veille).</div>
+    </div>
+
+    <div class="card">
+      <div class="tag" style="background:#CE2F2F">LISTE D’EXCLUSION</div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h25v25H0z"/><path stroke="#10161D" d="M2 2.5h7m2 0h1m1 0h1m2 0h7M2 3.5h1m5 0h1m2 0h1m2 0h1m1 0h1m5 0h1M2 4.5h1m1 0h3m1 0h1m1 0h2m2 0h1m1 0h1m1 0h3m1 0h1M2 5.5h1m1 0h3m1 0h1m1 0h3m3 0h1m1 0h3m1 0h1M2 6.5h1m1 0h3m1 0h1m1 0h1m2 0h2m1 0h1m1 0h3m1 0h1M2 7.5h1m5 0h1m1 0h1m3 0h1m1 0h1m5 0h1M2 8.5h7m1 0h1m1 0h1m1 0h1m1 0h7M10 9.5h2m1 0h2M2 10.5h1m1 0h5m5 0h1m1 0h5M2 11.5h1m1 0h2m4 0h1m1 0h1m1 0h1m2 0h1m1 0h1m2 0h1M3 12.5h1m2 0h1m1 0h2m3 0h1m3 0h1m4 0h1M5 13.5h3m4 0h1m4 0h4m1 0h1M2 14.5h1m1 0h1m3 0h1m2 0h1m1 0h1m3 0h1M10 15.5h1m2 0h5m1 0h1M2 16.5h7m2 0h1m2 0h1m1 0h2m3 0h2M2 17.5h1m5 0h1m1 0h2m1 0h5m2 0h2M2 18.5h1m1 0h3m1 0h1m1 0h3m1 0h1m2 0h1m1 0h3M2 19.5h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m2 0h4M2 20.5h1m1 0h3m1 0h1m1 0h1m1 0h2m1 0h1m1 0h1M2 21.5h1m5 0h1m3 0h1m5 0h1m3 0h1M2 22.5h7m1 0h1m1 0h2m1 0h1m1 0h2m1 0h1"/></svg>
+</div>
+      <div class="nom">Moussa Koffi</div>
+      <div class="ent">MK Trading · <span class="mono">NV-2207-020</span></div>
+      <div class="attendu">→ ACCÈS REFUSÉ (motif jamais affiché à l’agent).</div>
+    </div>
+
+    <div class="card">
+      <div class="tag" style="background:#CE2F2F">FRAUDE</div>
+      <div class="qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" shape-rendering="crispEdges"><path fill="#FFFFFF" d="M0 0h25v25H0z"/><path stroke="#10161D" d="M2 2.5h7m2 0h2m3 0h7M2 3.5h1m5 0h1m3 0h2m2 0h1m5 0h1M2 4.5h1m1 0h3m1 0h1m1 0h5m1 0h1m1 0h3m1 0h1M2 5.5h1m1 0h3m1 0h1m1 0h1m1 0h2m2 0h1m1 0h3m1 0h1M2 6.5h1m1 0h3m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h3m1 0h1M2 7.5h1m5 0h1m1 0h4m2 0h1m5 0h1M2 8.5h7m1 0h1m1 0h1m1 0h1m1 0h7M10 9.5h2M2 10.5h1m1 0h5m3 0h2m2 0h5M2 11.5h3m4 0h3m1 0h2m3 0h2m2 0h1M2 12.5h2m4 0h1m5 0h4m3 0h2M4 13.5h1m1 0h2m2 0h9m3 0h1M5 14.5h4m1 0h1m3 0h1m3 0h1m1 0h3M10 15.5h3m1 0h1m6 0h1M2 16.5h7m3 0h2m3 0h2m1 0h2M2 17.5h1m5 0h1m1 0h1m8 0h2m1 0h1M2 18.5h1m1 0h3m1 0h1m1 0h4m3 0h3m1 0h1M2 19.5h1m1 0h3m1 0h1m1 0h1m2 0h4m1 0h3M2 20.5h1m1 0h3m1 0h1m1 0h3m1 0h1m1 0h1m1 0h3M2 21.5h1m5 0h1m2 0h1m1 0h5m4 0h1M2 22.5h7m1 0h1m1 0h1m1 0h1m4 0h2"/></svg>
+</div>
+      <div class="nom">QR falsifié</div>
+      <div class="ent">Contenu altéré ou forgé · <span class="mono">XX-FAKE-9999</span></div>
+      <div class="attendu">→ QR INVALIDE (signature non vérifiable).</div>
+    </div></div>
+</body>
+</html>
