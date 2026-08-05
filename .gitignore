@@ -43,4 +43,4 @@ example
 /android
 
 .CLAUDE.md
-.claude
+.claude/settings.json
