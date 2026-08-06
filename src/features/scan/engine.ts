@@ -96,6 +96,27 @@ export function decideInvalidSignature(ctx: ScanContext): ScanDecision {
   };
 }
 
+// Le claim Exp du QR se lit sans réseau : le serveur classe ce cas en
+// INVALID_SIGNATURE, on prononce le même code hors ligne.
+export function decideExpiredQr(ctx: ScanContext): ScanDecision {
+  return {
+    verdict: {
+      kind: 'no',
+      code: 'INVALID_SIGNATURE',
+      title: 'QR EXPIRÉ',
+      who: 'QR hors de sa durée de validité',
+      detail: 'Le visiteur doit faire régénérer son QR · poste de garde',
+      reason: 'QR EXPIRÉ',
+      degraded: true,
+      securityEvent: false,
+    },
+    patch: {},
+    journal: entry(ctx, 'QR expiré', {
+      det: "QR au-delà de sa date d'expiration cryptographique (claim Exp) — refus prononcé hors ligne",
+    }),
+  };
+}
+
 export function decideNotInList(ctx: ScanContext): ScanDecision {
   return {
     verdict: {
@@ -161,7 +182,15 @@ export function decideOffline(visit: OfflineVisit, ctx: ScanContext): ScanDecisi
     };
   }
 
-  // Poste ENTRÉE : titulaire déjà sur site = suspicion de QR copié ou volé.
+  // Poste ENTRÉE. L'exclusion, portée par la liste signée, prime sur tout le reste.
+  if (visit.exclu) {
+    return deny(
+      ctx, visit.nom, who, 'DENIED_Excluded', 'VOIR POSTE DE GARDE',
+      "Porteur inscrit sur la liste d'exclusion — refus prononcé hors ligne depuis la liste signée",
+    );
+  }
+
+  // Titulaire déjà sur site = suspicion de QR copié ou volé.
   if (visit.present) {
     const entree = visit.entreeAt ? fmt(visit.entreeAt) : '—';
     return {

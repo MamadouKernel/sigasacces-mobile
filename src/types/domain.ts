@@ -2,11 +2,12 @@ export type AccessMode = 'unique' | '30j';
 export type VisitStatus = 'valide' | 'consomme' | 'revoque';
 export type Direction = 'entree' | 'sortie';
 
-// Alignés sur ScanResponseDto.VerdictCode côté backend.
+// Énumération exhaustive de ScanResponseDto.VerdictCode (Swagger, POST /api/scan).
 export type VerdictCode =
   | 'GRANTED'
   | 'CHECKED_OUT'
   | 'INVALID_SIGNATURE'
+  | 'INVALID_CODE'
   | 'DENIED_Excluded'
   | 'DENIED_SuspectedDuplicate'
   | 'DENIED_CycleAlreadyClosed'
@@ -50,7 +51,6 @@ export interface JournalEntry {
 export interface Agent {
   matricule: string;
   nom?: string;
-  shiftId?: string;
 }
 
 export interface PostConfig {
@@ -67,6 +67,7 @@ export interface OfflineVisit {
   nom: string;
   mode: AccessMode;
   statut: VisitStatus;
+  exclu: boolean;
   fenetreDebut?: number;
   fenetreFin?: number;
   present: boolean;
@@ -75,11 +76,9 @@ export interface OfflineVisit {
 }
 
 export interface PendingScan {
-  visitId: string;
   signedQrPayload: string;
   direction: Direction;
-  wasGranted: boolean;
+  agentId: string;
   occurredAt: number;
-  verdictCode: VerdictCode;
-  wasSecurityEvent: boolean;
+  offlineVerdict: VerdictCode;
 }

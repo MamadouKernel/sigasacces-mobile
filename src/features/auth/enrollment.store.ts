@@ -4,44 +4,48 @@ import {
   ApiError,
   NetworkError,
   api,
+  setApiKey,
   setBaseUrl,
-  setDeviceToken,
   setSiteId,
   apiConfig,
 } from '@/lib/api';
 import {
   SecureRandomUnavailableError,
-  bytesToBase64,
+  bytesToBase64Url,
   generateDeviceKeyPair,
   randomUuid,
   signWithDeviceKey,
 } from '@/lib/crypto';
 import { deleteItem, getItem, setItem } from '@/lib/storage';
 
-const ENROLLMENT_KEY = 'novacces.enrollment';
+// Suffixe de version : un enrôlement écrit avant la spec du 05/08/2026 portait
+// un jeton Bearer là où le serveur attend une clé X-Api-Key. Le relire mènerait
+// à des 401 en boucle — mieux vaut forcer un réenrôlement.
+const ENROLLMENT_KEY = 'novacces.enrollment.v2';
 // Clé privée stockée à part : elle ne doit jamais transiter.
-const DEVICE_KEY = 'novacces.device-private-key';
+const DEVICE_KEY = 'novacces.device-private-key.v2';
 
 export interface StoredEnrollment {
   deviceInstanceId: string;
   publicKeyPem: string;
-  deviceToken: string;
+  /** Secret opaque du terminal, envoyé en X-Api-Key sur chaque requête. */
+  apiKey: string;
   baseUrl: string;
-  siteId?: string;
-  siteLabel?: string;
+  terminalLabel?: string;
+  /** Sites autorisés ; une seule entrée = terminal mono-site. */
+  siteIds: string[];
   /** Clés publiques ES256 du serveur, par `kid` (vérification hors ligne). */
   publicKeys: Record<string, string>;
 }
 
-// Le serveur ne publie pas le message couvert par proofSignature ni son
-// encodage. Cinq hypothèses ont été testées contre la prod, toutes rejetées ;
-// seules ces deux fonctions sont à corriger quand la spec arrivera.
+// Message vérifié côté serveur : UTF8.GetBytes($"{ticket}|{deviceInstanceId}"),
+// signé en ES256 P1363 puis encodé en Base64URL (DeviceEnrollmentEndpoints.cs).
 function buildProofMessage(ticket: string, deviceInstanceId: string): string {
-  return `${ticket}.${deviceInstanceId}`;
+  return `${ticket}|${deviceInstanceId}`;
 }
 
 function encodeProof(signature: Uint8Array): string {
-  return bytesToBase64(signature);
+  return bytesToBase64Url(signature);
 }
 
 // Le ticket est soit une chaîne brute, soit un JSON { ticket, baseUrl } qui
@@ -96,8 +100,8 @@ export const useEnrollmentStore = create<EnrollmentState>((set, get) => ({
     }
     if (enrollment) {
       setBaseUrl(enrollment.baseUrl);
-      setDeviceToken(enrollment.deviceToken);
-      setSiteId(enrollment.siteId ?? null);
+      setApiKey(enrollment.apiKey);
+      setSiteId(soleSiteId(enrollment));
     }
     set({ enrollment, hydrated: true });
   },
@@ -123,8 +127,8 @@ export const useEnrollmentStore = create<EnrollmentState>((set, get) => ({
         proofSignature,
       });
 
-      setDeviceToken(activation.token);
-      setSiteId(activation.siteId ?? null);
+      setApiKey(activation.apiKey);
+      setSiteId(activation.siteIds.length === 1 ? activation.siteIds[0] : null);
 
       // Sans les clés publiques, le mode dégradé ne peut rien valider ; elles
       // restent récupérables plus tard, l'échec ne bloque pas la mise en service.
@@ -138,10 +142,10 @@ export const useEnrollmentStore = create<EnrollmentState>((set, get) => ({
       const enrollment: StoredEnrollment = {
         deviceInstanceId,
         publicKeyPem,
-        deviceToken: activation.token,
+        apiKey: activation.apiKey,
         baseUrl: apiConfig.baseUrl,
-        siteId: activation.siteId,
-        siteLabel: activation.siteLabel,
+        terminalLabel: activation.label,
+        siteIds: activation.siteIds,
         publicKeys,
       };
 
@@ -174,13 +178,18 @@ export const useEnrollmentStore = create<EnrollmentState>((set, get) => ({
   },
 
   reset: async () => {
-    setDeviceToken(null);
+    setApiKey(null);
     setSiteId(null);
     set({ enrollment: null });
     await deleteItem(ENROLLMENT_KEY);
     await deleteItem(DEVICE_KEY);
   },
 }));
+
+/** Site implicite d'un terminal mono-site ; `null` dès qu'il y a un choix à faire. */
+export function soleSiteId(enrollment: StoredEnrollment | null): string | null {
+  return enrollment?.siteIds.length === 1 ? enrollment.siteIds[0] : null;
+}
 
 export function publicKeyFor(kid: string | undefined): string | null {
   const keys = useEnrollmentStore.getState().enrollment?.publicKeys ?? {};

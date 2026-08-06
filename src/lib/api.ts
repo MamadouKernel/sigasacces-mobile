@@ -1,8 +1,5 @@
 import type { AccessMode, Direction, VerdictCode, VisitStatus } from '@/types/domain';
 
-// Le contrat OpenAPI ne type aucune réponse. Les parseurs ci-dessous acceptent
-// plusieurs graphies et échouent via ContractError.
-
 export const apiConfig = {
   baseUrl: process.env.EXPO_PUBLIC_API_URL?.trim() || 'https://api.sigasacces.com',
   timeoutMs: 10_000,
@@ -12,22 +9,27 @@ export function setBaseUrl(url: string) {
   apiConfig.baseUrl = url.trim().replace(/\/+$/, '');
 }
 
-// deviceToken : délivré à l'activation, identité de l'appareil.
-// agentToken : délivré à la prise de poste, prime tant que le poste est ouvert.
-let deviceToken: string | null = null;
-let agentToken: string | null = null;
+// apiKey : secret opaque remis à l'activation, identité du terminal, stable
+// jusqu'à révocation par l'admin. shiftToken : jeton de poste, délivré à la
+// prise de poste et porté par l'en-tête Authorization.
+let apiKey: string | null = null;
+let shiftToken: string | null = null;
 let siteId: string | null = null;
 
-export function setDeviceToken(token: string | null) {
-  deviceToken = token;
+export function setApiKey(key: string | null) {
+  apiKey = key;
 }
 
-export function setAgentToken(token: string | null) {
-  agentToken = token;
+export function setShiftToken(token: string | null) {
+  shiftToken = token;
 }
 
 export function setSiteId(id: string | null) {
   siteId = id;
+}
+
+export function currentShiftToken(): string | null {
+  return shiftToken;
 }
 
 export class ApiError extends Error {
@@ -68,6 +70,9 @@ export function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401) return 'Session expirée — reprenez la prise de poste.';
     if (err.status === 403) return "Ce terminal n'est pas autorisé pour cette opération.";
+    // 410 : seul /api/device-enrollments/activate le produit.
+    if (err.status === 410) return "Ticket d'enrôlement expiré ou déjà utilisé — demandez-en un nouveau.";
+    // 429 : 30 scans/min par IP+terminal, sans corps JSON exploitable.
     if (err.status === 429) return 'Trop de tentatives — patientez avant de réessayer.';
     return err.message;
   }
@@ -75,19 +80,30 @@ export function errorMessage(err: unknown): string {
   return (err as Error)?.message ?? 'Erreur inattendue.';
 }
 
+interface RequestOptions {
+  extraHeaders?: Record<string, string>;
+  /** Statuts d'erreur dont le corps porte une réponse métier exploitable. */
+  acceptStatus?: number[];
+}
+
 async function request<T>(
   method: 'GET' | 'POST',
   path: string,
   body?: unknown,
+  options?: RequestOptions,
 ): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), apiConfig.timeoutMs);
 
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const bearer = agentToken ?? deviceToken;
-  if (bearer) headers.Authorization = `Bearer ${bearer}`;
+  // La policy AgentTerminal exige X-Api-Key sur chaque requête : le Bearer ne
+  // remplace jamais la clé de terminal, les deux voyagent ensemble.
+  if (apiKey) headers['X-Api-Key'] = apiKey;
+  if (shiftToken) headers.Authorization = `Bearer ${shiftToken}`;
+  // Obligatoire pour un terminal multi-sites, ignoré sans effet pour un mono-site.
   if (siteId) headers['X-Site-Id'] = siteId;
+  Object.assign(headers, options?.extraHeaders);
 
   let res: Response;
   try {
@@ -105,7 +121,7 @@ async function request<T>(
 
   const text = await res.text().catch(() => '');
 
-  if (!res.ok) {
+  if (!res.ok && !options?.acceptStatus?.includes(res.status)) {
     throw new ApiError(res.status, extractError(text) ?? `HTTP ${res.status}`);
   }
   if (!text) return undefined as T;
@@ -202,39 +218,46 @@ export interface DeviceActivationRequest {
 }
 
 export interface DeviceActivationResult {
-  token: string;
-  siteId?: string;
-  siteLabel?: string;
+  terminalId?: string;
+  label?: string;
+  /** Sites autorisés pour ce terminal ; une seule entrée = terminal mono-site. */
+  siteIds: string[];
+  apiKey: string;
 }
 
 function parseDeviceActivation(raw: unknown): DeviceActivationResult {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/device-enrollments/activate', raw);
-  const token = pickString(data, 'token', 'accessToken', 'deviceToken', 'apiKey', 'terminalKey');
-  if (!token) throw new ContractError('/api/device-enrollments/activate — jeton', raw);
+  const key = pickString(data, 'apiKey');
+  if (!key) throw new ContractError('/api/device-enrollments/activate — apiKey', raw);
+  const siteIds = Array.isArray(data.siteIds)
+    ? data.siteIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')
+    : [];
   return {
-    token,
-    siteId: pickString(data, 'siteId', 'site'),
-    siteLabel: pickString(data, 'siteLabel', 'siteName', 'label'),
+    terminalId: pickString(data, 'terminalId'),
+    label: pickString(data, 'label'),
+    siteIds,
+    apiKey: key,
   };
 }
 
 export interface ShiftStartResult {
-  token?: string;
+  shiftToken: string;
   matricule: string;
-  nom?: string;
-  shiftId?: string;
+  displayName?: string;
+  expiresAt?: number;
 }
 
 function parseShiftStart(raw: unknown, fallbackMatricule: string): ShiftStartResult {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/agent/shift/start', raw);
-  const agent = asObject(data.agent) ?? data;
+  const token = pickString(data, 'shiftToken');
+  if (!token) throw new ContractError('/api/agent/shift/start — shiftToken', raw);
   return {
-    token: pickString(data, 'token', 'accessToken', 'jwt'),
-    matricule: pickString(agent, 'matricule', 'badge', 'agentId') ?? fallbackMatricule,
-    nom: pickString(agent, 'nom', 'name', 'displayName', 'fullName'),
-    shiftId: pickString(data, 'shiftId', 'id', 'posteId'),
+    shiftToken: token,
+    matricule: pickString(data, 'matricule') ?? fallbackMatricule,
+    displayName: pickString(data, 'displayName'),
+    expiresAt: pickDate(data, 'expiresAt'),
   };
 }
 
@@ -248,37 +271,52 @@ export interface SiteConfig {
   checkpoints: SiteRef[];
 }
 
-function parseSiteRef(raw: Json): SiteRef | null {
-  const id = pickString(raw, 'id', 'checkpointId', 'siteId', 'code');
-  const label = pickString(raw, 'nom', 'label', 'name', 'siteLabel');
-  if (!id && !label) return null;
-  return { id: id ?? (label as string), label: label ?? (id as string) };
+function parseCheckpoint(raw: Json): SiteRef | null {
+  const id = pickString(raw, 'id');
+  const nom = pickString(raw, 'nom');
+  if (!id && !nom) return null;
+  return { id: id ?? (nom as string), label: nom ?? (id as string) };
 }
 
-function parseSites(raw: unknown): SiteRef[] {
-  const list = Array.isArray(raw) ? raw : pickArray(asObject(raw) ?? {}, 'sites', 'items', 'data');
-  const sites = list
-    .map((item) => asObject(item))
-    .filter((item): item is Json => item !== null)
-    .map(parseSiteRef)
-    .filter((site): site is SiteRef => site !== null);
-  if (sites.length === 0) throw new ContractError('/api/agent/sites', raw);
-  return sites;
+// Tableau nu de chaînes : le serveur ne renvoie pas de libellé, seul
+// GET /api/site/config en fournit un une fois le site sélectionné.
+function parseSites(raw: unknown): string[] {
+  if (!Array.isArray(raw)) throw new ContractError('/api/agent/sites', raw);
+  return raw.filter((id): id is string => typeof id === 'string' && id.trim() !== '');
 }
 
 function parseSiteConfig(raw: unknown): SiteConfig {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/site/config', raw);
-  const checkpoints = pickArray(data, 'postes', 'checkpoints', 'points')
-    .map(parseSiteRef)
-    .filter((site): site is SiteRef => site !== null);
   return {
-    siteLabel: pickString(data, 'siteLabel', 'label', 'nom', 'name'),
-    checkpoints,
+    siteLabel: pickString(data, 'siteLabel'),
+    checkpoints: pickArray(data, 'postes')
+      .map(parseCheckpoint)
+      .filter((site): site is SiteRef => site !== null),
   };
 }
 
-export interface ExpectedVisit {
+function parseAccessMode(raw: string | undefined): AccessMode {
+  const value = (raw ?? '').toLowerCase();
+  return value.includes('30') || value.includes('recurr') ? '30j' : 'unique';
+}
+
+// Vocabulaire serveur : « attendu », « sur site », « sorti », « révoqué »,
+// « non venu ». La présence est portée par le statut, pas par un champ à part.
+function parseVisitStatus(raw: string | undefined): { statut: VisitStatus; present: boolean } {
+  const value = (raw ?? '').toLowerCase();
+  if (value.includes('revoq') || value.includes('révoq')) {
+    return { statut: 'revoque', present: false };
+  }
+  if (value.includes('sur site')) return { statut: 'valide', present: true };
+  if (value.includes('sorti') || value.includes('consom')) {
+    return { statut: 'consomme', present: false };
+  }
+  return { statut: 'valide', present: false };
+}
+
+/** Ligne de `visits[]` en clair : affichage de l'écran « Attendus » seulement. */
+export interface ListedVisit {
   visitId: string;
   nom: string;
   mode: AccessMode;
@@ -288,60 +326,114 @@ export interface ExpectedVisit {
   present: boolean;
 }
 
-function parseExpectedVisit(raw: Json): ExpectedVisit | null {
-  const visitId = pickString(raw, 'visitId', 'id', 'visitToken');
-  const nom = pickString(raw, 'nom', 'visitorName', 'name', 'visiteur');
+function parseListedVisit(raw: Json): ListedVisit | null {
+  const visitId = pickString(raw, 'visitId');
+  const nom = pickString(raw, 'nom');
   if (!visitId || !nom) return null;
-
-  const rawMode = (pickString(raw, 'mode', 'accessMode') ?? '').toLowerCase();
-  const rawStatut = (pickString(raw, 'statut', 'status') ?? '').toLowerCase();
-
+  const status = parseVisitStatus(pickString(raw, 'statut'));
   return {
     visitId,
     nom,
-    mode: rawMode.includes('30') || rawMode.includes('recurr') ? '30j' : 'unique',
-    statut: rawStatut.includes('revoq') || rawStatut.includes('revok')
-      ? 'revoque'
-      : rawStatut.includes('consom') || rawStatut.includes('consumed')
-        ? 'consomme'
-        : 'valide',
-    fenetreDebut: pickDate(raw, 'fenetreDebut', 'windowStart', 'validFrom'),
-    fenetreFin: pickDate(raw, 'fenetreFin', 'windowEnd', 'validUntil'),
-    present: pickBool(raw, 'present', 'isOnSite', 'onSite') ?? false,
+    mode: parseAccessMode(pickString(raw, 'mode')),
+    statut: status.statut,
+    fenetreDebut: pickDate(raw, 'fenetreDebut'),
+    fenetreFin: pickDate(raw, 'fenetreFin'),
+    present: pickBool(raw, 'present') ?? status.present,
   };
 }
 
-function parseExpectedVisits(raw: unknown): ExpectedVisit[] {
-  const list = Array.isArray(raw)
-    ? (raw.filter((v) => asObject(v)) as Json[])
-    : pickArray(asObject(raw) ?? {}, 'visits', 'items', 'expected', 'data');
-  return list.map(parseExpectedVisit).filter((v): v is ExpectedVisit => v !== null);
+/** Ni `visitId` ni `mode` dans ce DTO : jamais une base de décision de scan. */
+export interface ExpectedVisitor {
+  nom: string;
+  statut: VisitStatus;
+  present: boolean;
+  fenetreDebut?: number;
+  fenetreFin?: number;
 }
 
-export interface OfflineList {
-  jws?: string;
-  visits: ExpectedVisit[];
+function parseExpectedVisitors(raw: unknown): ExpectedVisitor[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => asObject(item))
+    .filter((item): item is Json => item !== null)
+    .map((item): ExpectedVisitor | null => {
+      const nom = pickString(item, 'visitorName');
+      if (!nom) return null;
+      const status = parseVisitStatus(pickString(item, 'status'));
+      return {
+        nom,
+        statut: status.statut,
+        present: status.present,
+        fenetreDebut: pickDate(item, 'windowStart'),
+        fenetreFin: pickDate(item, 'windowEnd'),
+      };
+    })
+    .filter((v): v is ExpectedVisitor => v !== null);
+}
+
+export interface OfflineListResponse {
+  /** Enveloppe signée sérialisée en chaîne JSON — à parser une seconde fois. */
+  signedList: string;
+  visits: ListedVisit[];
   expiresAt?: number;
 }
 
-// La liste arrive soit en JWS compact brut, soit enveloppée dans un objet JSON.
-function parseOfflineListEnvelope(raw: unknown): { jws?: string; payload: unknown } {
-  if (typeof raw === 'string') return { jws: raw, payload: undefined };
+function parseOfflineListResponse(raw: unknown): OfflineListResponse {
   const data = asObject(raw);
-  if (!data) throw new ContractError('/api/agent/offline-list', raw);
-  const jws = pickString(data, 'jws', 'token', 'signedList', 'payload', 'signedPayload');
-  if (jws && jws.split('.').length === 3) return { jws, payload: undefined };
-  return { jws: undefined, payload: data };
+  if (!data) throw new ContractError('/api/offline-list', raw);
+  const signedList = pickString(data, 'signedList');
+  if (!signedList) throw new ContractError('/api/offline-list — signedList', raw);
+  return {
+    signedList,
+    visits: pickArray(data, 'visits')
+      .map(parseListedVisit)
+      .filter((v): v is ListedVisit => v !== null),
+    expiresAt: pickDate(data, 'expiresAtUtc'),
+  };
 }
 
-export function parseOfflineListPayload(raw: unknown, jws?: string): OfflineList {
-  const data = asObject(raw);
-  if (!data) throw new ContractError('/api/agent/offline-list — charge utile', raw);
-  return {
-    jws,
-    visits: parseExpectedVisits(data),
-    expiresAt: pickDate(data, 'expiresAtUtc', 'expiresAt'),
-  };
+// Entrée de la liste signée : seule source autorisée pour un verdict hors ligne.
+// Le `visitToken` qui l'accompagne n'est pas repris : la resynchronisation
+// renvoie le QR signé, à charge du serveur d'en redériver la visite.
+export interface SignedVisit {
+  visitId: string;
+  scheduledAt?: number;
+  isExcluded: boolean;
+  isOnSite: boolean;
+}
+
+export function parseSignedVisits(payload: unknown): SignedVisit[] {
+  const list = Array.isArray(payload)
+    ? payload
+    : pickArray(asObject(payload) ?? {}, 'visits', 'items', 'entries');
+  return list
+    .map((item) => asObject(item))
+    .filter((item): item is Json => item !== null)
+    .map((item): SignedVisit | null => {
+      const visitId = pickString(item, 'visitId', 'VisitId');
+      if (!visitId) return null;
+      return {
+        visitId,
+        scheduledAt: pickDate(item, 'scheduledAt', 'ScheduledAt'),
+        isExcluded: pickBool(item, 'isExcluded', 'IsExcluded') ?? false,
+        isOnSite: pickBool(item, 'isOnSite', 'IsOnSite') ?? false,
+      };
+    })
+    .filter((v): v is SignedVisit => v !== null);
+}
+
+/** Claims du QR visiteur, une fois l'enveloppe vérifiée. `exp` en secondes Unix. */
+export interface QrClaims {
+  visitId: string;
+  exp?: number;
+}
+
+export function parseQrClaims(payload: unknown): QrClaims | null {
+  const data = asObject(payload);
+  if (!data) return null;
+  const visitId = pickString(data, 'VisitId', 'visitId');
+  if (!visitId) return null;
+  return { visitId, exp: pickNumber(data, 'Exp', 'exp') };
 }
 
 export type ApiDirection = 'Entry' | 'Exit';
@@ -362,27 +454,27 @@ export interface ScanResult {
 function parseScanResult(raw: unknown): ScanResult {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/scan', raw);
-  const verdictCode = pickString(data, 'verdictCode', 'verdict', 'code');
+  const verdictCode = pickString(data, 'verdictCode');
   if (!verdictCode) throw new ContractError('/api/scan — verdictCode', raw);
   return {
-    isGranted: pickBool(data, 'isGranted', 'granted') ?? false,
-    isCheckOut: pickBool(data, 'isCheckOut', 'checkOut') ?? false,
-    isSecurityEvent: pickBool(data, 'isSecurityEvent', 'securityEvent') ?? false,
+    isGranted: pickBool(data, 'isGranted') ?? false,
+    isCheckOut: pickBool(data, 'isCheckOut') ?? false,
+    isSecurityEvent: pickBool(data, 'isSecurityEvent') ?? false,
     verdictCode: verdictCode as VerdictCode,
-    visitorName: pickString(data, 'visitorName', 'nom', 'name'),
-    overstayMinutes: pickNumber(data, 'overstayMinutes', 'overstay'),
+    visitorName: pickString(data, 'visitorName'),
+    overstayMinutes: pickNumber(data, 'overstayMinutes'),
   };
 }
 
-/** `OfflineScanDto` du contrat OpenAPI (`POST /api/agent/resync`). */
+// Corps de `POST /api/scan/sync` : le serveur redérive la visite depuis le QR
+// signé, d'où l'absence de visitToken. Ni `wasGranted` ni `wasSecurityEvent` —
+// le verdict prononcé hors ligne tient dans `offlineVerdict`.
 export interface OfflineScanPayload {
-  visitToken: string;
-  direction: ApiDirection;
-  wasGranted: boolean;
-  occurredAt: string;
-  verdictCode: string;
-  wasSecurityEvent: boolean;
   signedQrPayload: string;
+  direction: ApiDirection;
+  agentId: string;
+  scannedAtUtc: string;
+  offlineVerdict: string;
 }
 
 export interface ResyncConflict {
@@ -395,14 +487,14 @@ export interface ResyncResult {
   conflicts: ResyncConflict[];
 }
 
-function parseResync(raw: unknown, sent: number): ResyncResult {
+function parseSyncResult(raw: unknown, sent: number): ResyncResult {
   const data = asObject(raw);
   if (!data) return { accepted: sent, conflicts: [] };
-  const conflicts = pickArray(data, 'conflicts', 'conflits', 'ecarts').map((item) => ({
-    visitId: pickString(item, 'visitId', 'id', 'visitToken'),
-    raison: pickString(item, 'raison', 'reason', 'message') ?? 'Écart signalé par le serveur',
+  const conflicts = pickArray(data, 'conflicts').map((item) => ({
+    visitId: pickString(item, 'visitId'),
+    raison: pickString(item, 'raison') ?? 'Écart signalé par le serveur',
   }));
-  return { accepted: pickNumber(data, 'accepted', 'acceptes') ?? sent - conflicts.length, conflicts };
+  return { accepted: pickNumber(data, 'accepted') ?? sent - conflicts.length, conflicts };
 }
 
 export const api = {
@@ -422,7 +514,7 @@ export const api = {
     );
   },
 
-  async agentSites(): Promise<SiteRef[]> {
+  async agentSites(): Promise<string[]> {
     return parseSites(await request<unknown>('GET', '/api/agent/sites'));
   },
 
@@ -435,12 +527,20 @@ export const api = {
     return parseShiftStart(raw, matricule);
   },
 
-  async expectedToday(): Promise<ExpectedVisit[]> {
-    return parseExpectedVisits(await request<unknown>('GET', '/api/agent/expected-today'));
+  // Idempotent : rejouer l'appel, ou l'appeler après qu'un autre agent a ouvert
+  // un poste sur le même terminal, renvoie 200 sans rien changer.
+  async shiftEnd(token: string): Promise<void> {
+    await request<unknown>('POST', '/api/agent/shift/end', undefined, {
+      extraHeaders: { 'X-Shift-Token': token },
+    });
   },
 
-  async offlineList(): Promise<{ jws?: string; payload: unknown }> {
-    return parseOfflineListEnvelope(await request<unknown>('GET', '/api/agent/offline-list'));
+  async expectedToday(): Promise<ExpectedVisitor[]> {
+    return parseExpectedVisitors(await request<unknown>('GET', '/api/agent/expected-today'));
+  },
+
+  async offlineList(): Promise<OfflineListResponse> {
+    return parseOfflineListResponse(await request<unknown>('GET', '/api/offline-list'));
   },
 
   async scan(
@@ -459,8 +559,14 @@ export const api = {
     );
   },
 
-  async resync(scans: OfflineScanPayload[]): Promise<ResyncResult> {
-    const raw = await request<unknown>('POST', '/api/agent/resync', { scans });
-    return parseResync(raw, scans.length);
+  // /api/agent/resync sert l'app MAUI historique et attend un autre corps de
+  // requête : c'est /api/scan/sync qui est la route du contrat React Native.
+  // Le corps est un tableau nu, pas un objet enveloppant. 409 n'est pas une
+  // erreur ici — il porte le même corps que 200, avec les écarts constatés.
+  async syncScans(scans: OfflineScanPayload[]): Promise<ResyncResult> {
+    const raw = await request<unknown>('POST', '/api/scan/sync', scans, {
+      acceptStatus: [409],
+    });
+    return parseSyncResult(raw, scans.length);
   },
 };

@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { Button } from '@/components/ui/Button';
 import { Logo } from '@/components/ui/Logo';
 import { useAuthStore } from '@/features/auth/auth.store';
-import { useEnrollmentStore } from '@/features/auth/enrollment.store';
+import { soleSiteId, useEnrollmentStore } from '@/features/auth/enrollment.store';
 import { useScanStore } from '@/features/scan/scan.store';
 import type { SiteRef } from '@/lib/api';
 import { colors, font, radius, spacing } from '@/theme/tokens';
@@ -20,6 +20,7 @@ export function ConfigPosteScreen() {
   const selectSite = useAuthStore((s) => s.selectSite);
   const configurePost = useAuthStore((s) => s.configurePost);
   const logout = useAuthStore((s) => s.logout);
+  const selectedSiteId = useAuthStore((s) => s.selectedSiteId);
   const enrollment = useEnrollmentStore((s) => s.enrollment);
   const refreshDayList = useScanStore((s) => s.refreshDayList);
 
@@ -38,8 +39,8 @@ export function ConfigPosteScreen() {
   }, [load]);
 
   const checkpoints = siteConfig?.checkpoints ?? [];
-  const multiSite = sites.length > 1 && !enrollment?.siteId;
-  const siteLabel = siteConfig?.siteLabel ?? enrollment?.siteLabel ?? sites[0]?.label ?? '—';
+  const multiSite = sites.length > 1;
+  const siteLabel = siteConfig?.siteLabel ?? soleSiteId(enrollment) ?? sites[0]?.label ?? '—';
 
   const chooseSite = async (site: SiteRef) => {
     const res = await selectSite(site);
@@ -56,7 +57,7 @@ export function ConfigPosteScreen() {
   };
 
   const switchAccount = () => {
-    logout();
+    void logout();
     router.replace('/login');
   };
 
@@ -73,7 +74,7 @@ export function ConfigPosteScreen() {
           <Text style={styles.label}>Site</Text>
           {multiSite ? (
             sites.map((site) => {
-              const selected = siteConfig?.siteLabel === site.label;
+              const selected = selectedSiteId === site.id;
               return (
                 <Pressable
                   key={site.id}

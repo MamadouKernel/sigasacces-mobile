@@ -7,13 +7,15 @@ import {
   NetworkError,
   api,
   errorMessage,
-  parseOfflineListPayload,
+  parseQrClaims,
+  parseSignedVisits,
   toApiDirection,
   type OfflineScanPayload,
   type ScanResult,
 } from '@/lib/api';
-import { readJwsHeader, verifyJws } from '@/lib/crypto';
+import { parseSignedEnvelope, verifySignedEnvelope, type SignedEnvelope } from '@/lib/crypto';
 import {
+  decideExpiredQr,
   decideInvalidSignature,
   decideListExpired,
   decideNotInList,
@@ -32,8 +34,10 @@ import type {
   VerdictCode,
 } from '@/types/domain';
 
-const OFFLINE_LIST_KEY = 'novacces.offline-list';
-const PENDING_SCANS_KEY = 'novacces.pending-scans';
+// Suffixe de version : le schéma des deux caches a changé avec la spec du
+// 05/08/2026, une entrée écrite avant serait relue de travers.
+const OFFLINE_LIST_KEY = 'novacces.offline-list.v2';
+const PENDING_SCANS_KEY = 'novacces.pending-scans.v2';
 
 const DENIAL_LABELS: Partial<Record<VerdictCode, { title: string; reason: string }>> = {
   INVALID_SIGNATURE: { title: 'QR INVALIDE', reason: 'SIGNATURE INVALIDE — QR ALTÉRÉ' },
@@ -107,11 +111,13 @@ function verdictFromFailure(detail: string): Verdict {
   };
 }
 
-function visitIdFromPayload(payload: Record<string, unknown> | null): string | null {
-  if (!payload) return null;
-  for (const key of ['visitId', 'visitToken', 'vid', 'sub', 'jti']) {
-    const value = payload[key];
-    if (typeof value === 'string' && value.trim()) return value.trim();
+// Un `keyId` inconnu ne disqualifie pas l'enveloppe : on retombe sur l'ensemble
+// des clés connues, la signature restant seule juge.
+function verifyWithKnownKeys<T>(envelope: SignedEnvelope): T | null {
+  const named = publicKeyFor(envelope.keyId);
+  for (const pem of named ? [named] : allPublicKeys()) {
+    const payload = verifySignedEnvelope<T>(envelope, pem);
+    if (payload) return payload;
   }
   return null;
 }
@@ -247,22 +253,18 @@ export const useScanStore = create<ScanState>((set, get) => ({
     // rejeté pendant une coupure.
     const current = get();
 
-    const kid = readJwsHeader(payload)?.kid;
-    const candidates = publicKeyFor(kid) ? [publicKeyFor(kid) as string] : allPublicKeys();
-    let claims: Record<string, unknown> | null = null;
-    for (const pem of candidates) {
-      claims = verifyJws<Record<string, unknown>>(payload, pem);
-      if (claims) break;
-    }
+    const envelope = parseSignedEnvelope(payload);
+    const claims = envelope ? parseQrClaims(verifyWithKnownKeys(envelope)) : null;
 
     let decision: ScanDecision;
     if (!claims) {
       decision = decideInvalidSignature(ctx);
+    } else if (claims.exp !== undefined && ctx.now >= claims.exp * 1000) {
+      decision = decideExpiredQr(ctx);
     } else if (current.ttlExpired) {
       decision = decideListExpired(ctx);
     } else {
-      const visitId = visitIdFromPayload(claims);
-      const visit = current.visits.find((v) => v.visitId === visitId);
+      const visit = current.visits.find((v) => v.visitId === claims.visitId);
       decision = visit ? decideOffline(visit, ctx) : decideNotInList(ctx);
 
       if (visit && Object.keys(decision.patch).length > 0) {
@@ -280,13 +282,11 @@ export const useScanStore = create<ScanState>((set, get) => ({
         const pending: PendingScan[] = [
           ...current.pending,
           {
-            visitId: visit.visitId,
             signedQrPayload: payload,
             direction: current.direction,
-            wasGranted: decision.verdict.kind === 'ok',
+            agentId,
             occurredAt: ctx.now,
-            verdictCode: decision.verdict.code,
-            wasSecurityEvent: decision.verdict.securityEvent,
+            offlineVerdict: decision.verdict.code,
           },
         ];
         set({ pending });
@@ -325,35 +325,36 @@ export const useScanStore = create<ScanState>((set, get) => ({
   refreshDayList: async () => {
     const now = Date.now();
     try {
-      const envelope = await api.offlineList();
-      let payload: unknown = envelope.payload;
+      const response = await api.offlineList();
 
-      if (envelope.jws) {
-        const kid = readJwsHeader(envelope.jws)?.kid;
-        const candidates = publicKeyFor(kid) ? [publicKeyFor(kid) as string] : allPublicKeys();
-        payload = null;
-        for (const pem of candidates) {
-          payload = verifyJws<unknown>(envelope.jws, pem);
-          if (payload) break;
-        }
-        if (!payload) {
-          // liste non vérifiable : on garde l'ancienne, le TTL fera foi
-          set({ lastSync: 'Liste du jour rejetée : signature non vérifiable' });
-          return;
-        }
+      // `signedList` transporte l'enveloppe sérialisée : la réponse HTTP est
+      // déjà parsée, son contenu doit l'être une seconde fois.
+      const envelope = parseSignedEnvelope(response.signedList);
+      const signed = envelope ? parseSignedVisits(verifyWithKnownKeys(envelope)) : null;
+      if (!signed) {
+        // liste non vérifiable : on garde l'ancienne, le TTL fera foi
+        set({ lastSync: 'Liste du jour rejetée : signature non vérifiable' });
+        return;
       }
 
-      const list = parseOfflineListPayload(payload, envelope.jws);
-      const expiresAt = list.expiresAt ?? now + 4 * 3_600_000;
-      const visits: OfflineVisit[] = list.visits.map((v) => ({
-        visitId: v.visitId,
-        nom: v.nom,
-        mode: v.mode,
-        statut: v.statut,
-        fenetreDebut: v.fenetreDebut,
-        fenetreFin: v.fenetreFin,
-        present: v.present,
-      }));
+      // Le signé fait autorité pour décider ; `visits[]` en clair n'apporte que
+      // le nom et la fenêtre, jamais un droit d'accès.
+      const display = new Map(response.visits.map((v) => [v.visitId, v]));
+      const visits: OfflineVisit[] = signed.map((entry) => {
+        const shown = display.get(entry.visitId);
+        return {
+          visitId: entry.visitId,
+          nom: shown?.nom ?? 'Visiteur',
+          mode: shown?.mode ?? 'unique',
+          statut: shown?.statut ?? 'valide',
+          exclu: entry.isExcluded,
+          fenetreDebut: shown?.fenetreDebut ?? entry.scheduledAt,
+          fenetreFin: shown?.fenetreFin,
+          present: entry.isOnSite,
+        };
+      });
+
+      const expiresAt = response.expiresAt ?? now + 4 * 3_600_000;
       set({ visits, offlineListExpiresAt: expiresAt, ttlExpired: now > expiresAt });
       await setItem(OFFLINE_LIST_KEY, JSON.stringify({ visits, expiresAt }));
     } catch (err) {
@@ -361,13 +362,15 @@ export const useScanStore = create<ScanState>((set, get) => ({
         set({ degraded: true });
         return;
       }
-      // repli : les attendus alimentent au moins l'écran de recherche
+      // Repli d'affichage seulement : ce DTO n'a pas de visitId, donc aucune de
+      // ces lignes ne peut être appariée à un QR scanné.
       try {
         const expected = await api.expectedToday();
         set({
-          visits: expected.map((v) => ({
-            visitId: v.visitId, nom: v.nom, mode: v.mode, statut: v.statut,
-            fenetreDebut: v.fenetreDebut, fenetreFin: v.fenetreFin, present: v.present,
+          visits: expected.map((v, i) => ({
+            visitId: `affichage-${i}`, nom: v.nom, mode: 'unique' as const,
+            statut: v.statut, exclu: false, fenetreDebut: v.fenetreDebut,
+            fenetreFin: v.fenetreFin, present: v.present,
           })),
         });
       } catch {
@@ -381,20 +384,18 @@ export const useScanStore = create<ScanState>((set, get) => ({
     if (pending.length === 0) return;
 
     const payload: OfflineScanPayload[] = pending.map((p) => ({
-      visitToken: p.visitId,
-      direction: toApiDirection(p.direction),
-      wasGranted: p.wasGranted,
-      occurredAt: new Date(p.occurredAt).toISOString(),
-      verdictCode: p.verdictCode,
-      wasSecurityEvent: p.wasSecurityEvent,
       signedQrPayload: p.signedQrPayload,
+      direction: toApiDirection(p.direction),
+      agentId: p.agentId,
+      scannedAtUtc: new Date(p.occurredAt).toISOString(),
+      offlineVerdict: p.offlineVerdict,
     }));
 
     try {
-      const result = await api.resync(payload);
+      const result = await api.syncScans(payload);
       const conflicts: JournalEntry[] = result.conflicts.map((c) => ({
         t: Date.now(),
-        nom: pending.find((p) => p.visitId === c.visitId)?.visitId ?? 'Visite',
+        nom: get().visits.find((v) => v.visitId === c.visitId)?.nom ?? 'Visite',
         agent: 'SYNC',
         ok: false,
         det: `CONFLIT à la resynchronisation : ${c.raison} — remonté au responsable sûreté`,

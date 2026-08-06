@@ -28,7 +28,7 @@ export function AppHeader({ onOpenList }: Props) {
       'La session sera fermée. Les scans déjà effectués restent journalisés.',
       [
         { text: 'Annuler', style: 'cancel' },
-        { text: 'Quitter', style: 'destructive', onPress: logout },
+        { text: 'Quitter', style: 'destructive', onPress: () => void logout() },
       ],
     );
   };

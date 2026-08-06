@@ -44,3 +44,6 @@ example
 
 .CLAUDE.md
 .claude/settings.json
+
+# banc de test local
+tools/.mock-keys.json

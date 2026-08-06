@@ -36,8 +36,7 @@ export function LoginScreen() {
 
   const reenroll = () => {
     const doReset = () => {
-      logout();
-      void resetEnrollment().then(() => router.replace('/enrolement'));
+      void logout().then(resetEnrollment).then(() => router.replace('/enrolement'));
     };
     if (Platform.OS === 'web') {
       doReset();
@@ -77,7 +76,7 @@ export function LoginScreen() {
         <Text style={styles.subtitle}>Application agent · contrôle des visiteurs</Text>
         {enrollment ? (
           <Text style={styles.siteChip}>
-            Terminal enrôlé{enrollment.siteLabel ? ` · ${enrollment.siteLabel}` : ''}
+            Terminal enrôlé{enrollment.terminalLabel ? ` · ${enrollment.terminalLabel}` : ''}
           </Text>
         ) : null}
 

@@ -1,3 +1,4 @@
+import { requireOptionalNativeModule } from 'expo';
 import { Platform } from 'react-native';
 
 // SecureStore (Keystore/Keychain), repli localStorage sur le web et mémoire
@@ -8,24 +9,17 @@ type SecureStoreModule = typeof import('expo-secure-store');
 
 let secureStore: SecureStoreModule | null | undefined;
 
-function nativeModuleAvailable(): boolean {
-  const expoGlobal = (globalThis as { expo?: { modules?: Record<string, unknown> } }).expo;
-  return Boolean(expoGlobal?.modules?.ExpoSecureStore);
-}
-
+// Sonder avec requireOptionalNativeModule, qui installe les modules natifs
+// avant de répondre. Lire `globalThis.expo.modules` directement se fait avant
+// cette installation et rend toujours undefined : le terminal retombait
+// silencieusement en mémoire volatile, et perdait son enrôlement à chaque
+// redémarrage sans qu'aucune erreur ne le signale.
 function getSecureStore(): SecureStoreModule | null {
   if (secureStore === undefined) {
-    // tester avant le require : sinon « Cannot find native module »
-    if (!nativeModuleAvailable()) {
-      secureStore = null;
-      return secureStore;
-    }
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      secureStore = require('expo-secure-store') as SecureStoreModule;
-    } catch {
-      secureStore = null;
-    }
+    secureStore = requireOptionalNativeModule('ExpoSecureStore')
+      ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+        (require('expo-secure-store') as SecureStoreModule)
+      : null;
   }
   return secureStore;
 }

@@ -1,42 +1,44 @@
 import { p256 } from '@noble/curves/nist.js';
+import { requireOptionalNativeModule } from 'expo';
 
 // ES256 (P-256 / SHA-256) en JS pur : identité de l'appareil à l'enrôlement,
-// et vérification hors ligne des JWS serveur (QR visiteurs, liste du jour).
+// et vérification hors ligne des enveloppes signées par le serveur (QR
+// visiteurs, liste du jour).
 
 export class SecureRandomUnavailableError extends Error {
   constructor() {
     super(
-      "Le module natif de cryptographie est absent de ce binaire. Installez une version de l'application incluant expo-crypto avant d'enrôler ce terminal.",
+      "Aucune source d'aléa sûre sur ce terminal. Le binaire doit embarquer expo-crypto : relancez un build de développement (npx expo run:android) plutôt qu'Expo Go.",
     );
     this.name = 'SecureRandomUnavailableError';
   }
 }
 
-type ExpoCryptoModule = typeof import('expo-crypto');
-
-let expoCrypto: ExpoCryptoModule | null | undefined;
-
-function nativeCryptoAvailable(): boolean {
-  const expoGlobal = (globalThis as { expo?: { modules?: Record<string, unknown> } }).expo;
-  return Boolean(expoGlobal?.modules?.ExpoCrypto);
+interface ExpoCryptoNative {
+  getRandomValues?: (array: Uint8Array) => void;
 }
 
-// Chargement paresseux : un require d'expo-crypto sur un binaire qui ne
-// l'embarque pas lève « Cannot find native module » dès l'import du fichier.
-function getExpoCrypto(): ExpoCryptoModule | null {
+let expoCrypto: ExpoCryptoNative | null | undefined;
+
+// Deux raisons de passer par requireOptionalNativeModule plutôt que par un
+// import d'`expo-crypto` ou une lecture directe du registre :
+//   — `expo-crypto` fait un requireNativeModule au niveau module, qui lève dès
+//     l'évaluation quand le binaire ne l'embarque pas (redbox en dév) ;
+//   — lire `globalThis.expo.modules` soi-même se fait avant l'installation des
+//     modules natifs, donc toujours à vide. C'est ce que faisait la détection
+//     précédente : elle échouait même sur un binaire complet.
+// requireOptionalNativeModule installe d'abord, puis rend `null` si absent.
+function getExpoCrypto(): ExpoCryptoNative | null {
   if (expoCrypto === undefined) {
-    if (!nativeCryptoAvailable()) {
-      expoCrypto = null;
-      return expoCrypto;
-    }
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      expoCrypto = require('expo-crypto') as ExpoCryptoModule;
-    } catch {
-      expoCrypto = null;
-    }
+    expoCrypto = requireOptionalNativeModule<ExpoCryptoNative>('ExpoCrypto');
   }
   return expoCrypto;
+}
+
+// Une source d'entropie en panne peut rendre un tableau inchangé plutôt que
+// lever : le vérifier évite de fabriquer une clé d'appareil devinable.
+function filled(bytes: Uint8Array): boolean {
+  return bytes.length < 8 || bytes.some((b) => b !== 0);
 }
 
 // Lève plutôt que de retomber sur Math.random : une clé d'appareil prédictible
@@ -47,15 +49,23 @@ export function secureRandomBytes(length: number): Uint8Array {
   const engineCrypto = (globalThis as { crypto?: Partial<Crypto> }).crypto;
   if (typeof engineCrypto?.getRandomValues === 'function') {
     engineCrypto.getRandomValues(bytes);
-    return bytes;
+    if (filled(bytes)) return bytes;
   }
 
   const native = getExpoCrypto();
-  if (native) {
+  if (typeof native?.getRandomValues === 'function') {
     native.getRandomValues(bytes);
-    return bytes;
+    if (filled(bytes)) return bytes;
   }
 
+  // Sans cette trace, l'échec ne dit pas s'il manque un module précis ou si
+  // l'app tourne dans un environnement sans modules natifs du tout.
+  const registry = (globalThis as { expo?: { modules?: Record<string, unknown> } }).expo?.modules;
+  console.warn(
+    `[novacces] ExpoCrypto introuvable. Modules natifs présents : ${
+      registry ? Object.keys(registry).sort().join(', ') || '(aucun)' : '(registre absent)'
+    }`,
+  );
   throw new SecureRandomUnavailableError();
 }
 
@@ -99,6 +109,10 @@ export function base64ToBytes(input: string): Uint8Array {
     if (clean[i + 3]) out[o++] = n & 0xff;
   }
   return out.subarray(0, o);
+}
+
+export function bytesToBase64Url(bytes: Uint8Array): string {
+  return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 export function base64UrlToBytes(input: string): Uint8Array {
@@ -202,38 +216,64 @@ export function signWithDeviceKey(privateKeyHex: string, message: string): Uint8
   return p256.sign(utf8ToBytes(message), hexToBytes(privateKeyHex), { prehash: true });
 }
 
-export interface JwsHeader {
-  alg?: string;
-  kid?: string;
+// Enveloppe signée NovAccès : ni JWS compact, ni RFC 7515 — pas d'en-tête, pas
+// de champ `alg`. Le `keyId` voyage en clair, hors signature : un keyId inconnu
+// ne fait qu'échouer la recherche de clé, il n'y a rien à valider en amont.
+export interface SignedEnvelope {
+  payloadB64Url: string;
+  signatureB64Url: string;
+  keyId?: string;
 }
 
-/** Lit l'en-tête d'un JWS sans vérifier la signature (choix du `kid`). */
-export function readJwsHeader(token: string): JwsHeader | null {
-  const [rawHeader] = token.split('.');
-  if (!rawHeader) return null;
+function readString(source: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === 'string' && value) return value;
+  }
+  return undefined;
+}
+
+// Le contrat écrit l'enveloppe en PascalCase ; la graphie camelCase est
+// acceptée aussi, un sérialiseur .NET reconfiguré ne doit pas transformer
+// tous les QR valides en « QR INVALIDE » sur le terrain.
+export function parseSignedEnvelope(raw: string): SignedEnvelope | null {
+  let data: unknown;
   try {
-    return JSON.parse(bytesToUtf8(base64UrlToBytes(rawHeader))) as JwsHeader;
+    data = JSON.parse(raw);
   } catch {
     return null;
   }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+
+  const fields = data as Record<string, unknown>;
+  const payloadB64Url = readString(fields, 'PayloadB64Url', 'payloadB64Url');
+  const signatureB64Url = readString(fields, 'SignatureB64Url', 'signatureB64Url');
+  if (!payloadB64Url || !signatureB64Url) return null;
+  return { payloadB64Url, signatureB64Url, keyId: readString(fields, 'KeyId', 'keyId') };
 }
 
-/** Vérifie un JWS compact ES256 ; `null` si la signature ne correspond pas. */
-export function verifyJws<T>(token: string, publicKeyPem: string): T | null {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  const [header, payload, signature] = parts;
-
+/**
+ * Vérifie la signature ES256 (P1363) portant sur les octets du payload JSON —
+ * pas sur sa forme Base64URL. `null` si la signature ne correspond pas.
+ */
+export function verifySignedEnvelope<T>(
+  envelope: SignedEnvelope,
+  publicKeyPem: string,
+): T | null {
   try {
-    if (readJwsHeader(token)?.alg !== 'ES256') return null;
+    const payloadBytes = base64UrlToBytes(envelope.payloadB64Url);
     const ok = p256.verify(
-      base64UrlToBytes(signature),
-      utf8ToBytes(`${header}.${payload}`),
+      base64UrlToBytes(envelope.signatureB64Url),
+      payloadBytes,
       pemToPublicKey(publicKeyPem),
-      { prehash: true },
+      // lowS:false est obligatoire ici. @noble/curves n'accepte par défaut que
+      // les signatures à S bas ; .NET ECDsa.SignData ne normalise pas, et
+      // produit un S haut une fois sur deux. Sans cette option, la moitié des
+      // QR authentiques serait refusée hors ligne en « QR INVALIDE ».
+      { prehash: true, lowS: false },
     );
     if (!ok) return null;
-    return JSON.parse(bytesToUtf8(base64UrlToBytes(payload))) as T;
+    return JSON.parse(bytesToUtf8(payloadBytes)) as T;
   } catch {
     return null;
   }

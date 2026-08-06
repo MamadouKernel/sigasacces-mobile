@@ -1,7 +1,15 @@
 import { create } from 'zustand';
 
-import { useEnrollmentStore } from '@/features/auth/enrollment.store';
-import { api, errorMessage, setAgentToken, setSiteId, type SiteConfig, type SiteRef } from '@/lib/api';
+import { soleSiteId, useEnrollmentStore } from '@/features/auth/enrollment.store';
+import {
+  api,
+  currentShiftToken,
+  errorMessage,
+  setShiftToken,
+  setSiteId,
+  type SiteConfig,
+  type SiteRef,
+} from '@/lib/api';
 import type { Agent, PostConfig } from '@/types/domain';
 
 // Session de l'agent, distincte de l'enrôlement du terminal. Le PIN est
@@ -10,6 +18,7 @@ interface AuthState {
   agent: Agent | null;
   post: PostConfig | null;
   sites: SiteRef[];
+  selectedSiteId: string | null;
   siteConfig: SiteConfig | null;
   busy: boolean;
 
@@ -17,13 +26,14 @@ interface AuthState {
   loadPostOptions: () => Promise<{ ok: boolean; error?: string }>;
   selectSite: (site: SiteRef) => Promise<{ ok: boolean; error?: string }>;
   configurePost: (checkpoint: SiteRef) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   agent: null,
   post: null,
   sites: [],
+  selectedSiteId: null,
   siteConfig: null,
   busy: false,
 
@@ -32,10 +42,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ busy: true });
     try {
       const result = await api.shiftStart(matricule, pin);
-      // sans jeton distinct, le jeton d'appareil continue de porter les requêtes
-      if (result.token) setAgentToken(result.token);
+      setShiftToken(result.shiftToken);
       set({
-        agent: { matricule: result.matricule, nom: result.nom, shiftId: result.shiftId },
+        agent: { matricule: result.matricule, nom: result.displayName },
         busy: false,
       });
       return { ok: true };
@@ -49,26 +58,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ busy: true });
     const enrollment = useEnrollmentStore.getState().enrollment;
     try {
-      let sites: SiteRef[] = [];
+      // Le serveur ne renvoie que des identifiants ; le libellé du site n'arrive
+      // qu'avec GET /api/site/config, une fois le site retenu.
+      let siteIds: string[] = [];
       try {
-        sites = await api.agentSites();
+        siteIds = await api.agentSites();
       } catch {
-        // terminal mono-site : le site vient de l'enrôlement
-        if (enrollment?.siteId) {
-          sites = [{ id: enrollment.siteId, label: enrollment.siteLabel ?? enrollment.siteId }];
-        }
+        siteIds = enrollment?.siteIds ?? [];
       }
+      const sites: SiteRef[] = siteIds.map((id) => ({ id, label: id }));
 
-      const preselected =
-        sites.find((s) => s.id === enrollment?.siteId) ?? (sites.length === 1 ? sites[0] : null);
+      const preselected = sites.length === 1 ? sites[0] : null;
       if (preselected) setSiteId(preselected.id);
 
       let siteConfig: SiteConfig | null = null;
-      if (preselected || enrollment?.siteId) {
-        siteConfig = await api.siteConfig();
-      }
+      if (preselected) siteConfig = await api.siteConfig();
 
-      set({ sites, siteConfig, busy: false });
+      set({ sites, selectedSiteId: preselected?.id ?? null, siteConfig, busy: false });
       return { ok: true };
     } catch (err) {
       set({ busy: false });
@@ -78,7 +84,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   selectSite: async (site) => {
     setSiteId(site.id);
-    set({ busy: true });
+    set({ busy: true, selectedSiteId: site.id });
     try {
       const siteConfig = await api.siteConfig();
       set({ siteConfig, busy: false });
@@ -91,21 +97,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   configurePost: (checkpoint) => {
     const enrollment = useEnrollmentStore.getState().enrollment;
-    const { sites, siteConfig } = get();
-    const site = sites.find((s) => s.id === enrollment?.siteId) ?? sites[0];
-    const siteId = site?.id ?? enrollment?.siteId ?? '';
+    const { selectedSiteId, siteConfig } = get();
+    const siteId = selectedSiteId ?? soleSiteId(enrollment) ?? '';
     set({
       post: {
         siteId,
-        siteLabel: siteConfig?.siteLabel ?? site?.label ?? enrollment?.siteLabel ?? siteId,
+        siteLabel: siteConfig?.siteLabel ?? siteId,
         checkpointId: checkpoint.id,
         checkpointLabel: checkpoint.label,
       },
     });
   },
 
-  logout: () => {
-    setAgentToken(null);
-    set({ agent: null, post: null, siteConfig: null, sites: [] });
+  // Sans cet appel, le poste resté ouvert continue d'attribuer les scans au
+  // matricule parti jusqu'à l'expiration naturelle du jeton.
+  logout: async () => {
+    const token = currentShiftToken();
+    setShiftToken(null);
+    set({ agent: null, post: null, siteConfig: null, sites: [], selectedSiteId: null });
+    if (!token) return;
+    try {
+      await api.shiftEnd(token);
+    } catch {
+      // idempotent côté serveur : le poste sera clos au prochain shift/start
+    }
   },
 }));
