@@ -50,7 +50,14 @@
       ],
       "expo-secure-store",
       "expo-image",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#F5A300"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -561,6 +561,16 @@ export const api = {
     }
   },
 
+  // §7 : jeton de notification push Expo de ce terminal — permet de le
+  // réveiller (son + notification) même app fermée en cas de dépassement.
+  async setPushToken(expoPushToken: string): Promise<void> {
+    try {
+      await request<unknown>('POST', '/api/agent/push-token', { expoPushToken });
+    } catch {
+      // best-effort : la prise de poste ne doit jamais échouer pour ça
+    }
+  },
+
   async expectedToday(): Promise<ExpectedVisitor[]> {
     return parseExpectedVisitors(await request<unknown>('GET', '/api/agent/expected-today'));
   },

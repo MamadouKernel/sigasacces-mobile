@@ -10,6 +10,7 @@ import {
   type SiteConfig,
   type SiteRef,
 } from '@/lib/api';
+import { registerForPushNotificationsAsync } from '@/lib/pushToken';
 import type { Agent, PostConfig } from '@/types/domain';
 
 // Session de l'agent, distincte de l'enrôlement du terminal. Le PIN est
@@ -47,6 +48,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         agent: { matricule: result.matricule, nom: result.displayName },
         busy: false,
       });
+      // Non bloquant : la prise de poste ne doit jamais attendre après la
+      // permission système ni le service push d'Expo (§7).
+      void registerForPushNotificationsAsync();
       return { ok: true };
     } catch (err) {
       set({ busy: false });
