@@ -31,7 +31,11 @@ export function ScannerScreen() {
     return () => clearInterval(timer);
   }, [checkConnectivity]);
 
+  // Chargement immédiat au montage : sans lui, l'agent ne voyait la liste des
+  // attendus qu'après le premier déclenchement de l'intervalle (15 min) — un
+  // setInterval seul ne s'exécute jamais immédiatement.
   useEffect(() => {
+    void refreshDayList();
     const timer = setInterval(() => void refreshDayList(), DAY_LIST_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [refreshDayList]);
