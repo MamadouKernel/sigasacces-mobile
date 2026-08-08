@@ -24,6 +24,7 @@ import {
   type ScanDecision,
 } from '@/features/scan/engine';
 import { getItem, setItem } from '@/lib/storage';
+import { playOverstayBeep } from '@/lib/sound';
 import { durSince, fmtDur } from '@/lib/time';
 import type {
   Direction,
@@ -145,6 +146,7 @@ interface ScanState {
   toggleHaptics: () => void;
   checkConnectivity: () => Promise<void>;
   refreshDayList: () => Promise<void>;
+  notifyOverstay: (visits: OfflineVisit[]) => Promise<void>;
   resync: () => Promise<void>;
   reset: () => void;
 }
@@ -436,6 +438,12 @@ export const useScanStore = create<ScanState>((set, get) => ({
     const now = Date.now();
     let visits: OfflineVisit[] = [];
     let expiresAt: number | null = null;
+    // Capturé AVANT le rafraîchissement : sert à détecter un NOUVEAU
+    // dépassement (§7) pour ne biper qu'au moment où il apparaît, pas à
+    // chaque rafraîchissement tant qu'il persiste.
+    const previousOverstay = new Map(
+      get().visits.map((v) => [v.visitId, v.overstayMinutes ?? 0]),
+    );
 
     try {
       const response = await api.offlineList().catch(() => null);
@@ -456,6 +464,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
               fenetreDebut: shown?.fenetreDebut ?? entry.scheduledAt,
               fenetreFin: shown?.fenetreFin,
               present: entry.isOnSite,
+              overstayMinutes: shown?.overstayMinutes,
             };
           });
           expiresAt = response.expiresAt ?? now + 4 * 3_600_000;
@@ -473,6 +482,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
           fenetreDebut: v.fenetreDebut,
           fenetreFin: v.fenetreFin,
           present: v.present,
+          overstayMinutes: v.overstayMinutes,
         }));
         expiresAt = response.expiresAt ?? now + 4 * 3_600_000;
       }
@@ -495,6 +505,16 @@ export const useScanStore = create<ScanState>((set, get) => ({
       }
 
       if (visits.length > 0) {
+        // Dépassement NOUVEAU (0 → >0 depuis le dernier rafraîchissement) :
+        // alerte l'agent au poste, pas seulement visible s'il ouvre la liste.
+        // "Dès le niveau 1" : tout passage à un dépassement effectif.
+        const newlyOverstaying = visits.filter(
+          (v) => (v.overstayMinutes ?? 0) > 0 && (previousOverstay.get(v.visitId) ?? 0) === 0,
+        );
+        if (newlyOverstaying.length > 0) {
+          void get().notifyOverstay(newlyOverstaying);
+        }
+
         set({
           visits,
           offlineListExpiresAt: expiresAt,
@@ -512,6 +532,33 @@ export const useScanStore = create<ScanState>((set, get) => ({
         set({ lastSync: errorMessage(err) });
       }
     }
+  },
+
+  // Alerte locale de dépassement (§7), détectée depuis la liste hors-ligne
+  // périodiquement rafraîchie (voir refreshDayList) — pas de connexion temps
+  // réel sur mobile. Faute de "niveau" d'escalade dans ce contrat (contrairement
+  // au flux SignalR du dashboard Sûreté), un seul bip pour tout dépassement
+  // nouvellement détecté ("dès le niveau 1"), même si plusieurs visiteurs
+  // basculent lors du même rafraîchissement — pas de barrage de sons.
+  notifyOverstay: async (overstaying) => {
+    if (get().haptics) {
+      try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch { /* best-effort */ }
+    }
+    playOverstayBeep(1);
+    set((s) => ({
+      journal: [
+        ...overstaying.map((v) => ({
+          t: Date.now(),
+          nom: v.nom,
+          agent: 'SYSTÈME',
+          ok: false,
+          det: `Dépassement détecté · +${fmtDur(v.overstayMinutes ?? 0)}`,
+          deg: false,
+          sec: false,
+        })),
+        ...s.journal,
+      ],
+    }));
   },
 
   resync: async () => {

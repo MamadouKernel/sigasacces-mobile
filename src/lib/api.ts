@@ -342,6 +342,7 @@ export interface ListedVisit {
   fenetreDebut?: number;
   fenetreFin?: number;
   present: boolean;
+  overstayMinutes?: number;
 }
 
 function parseListedVisit(raw: Json): ListedVisit | null {
@@ -357,6 +358,7 @@ function parseListedVisit(raw: Json): ListedVisit | null {
     fenetreDebut: pickDate(raw, 'fenetreDebut'),
     fenetreFin: pickDate(raw, 'fenetreFin'),
     present: pickBool(raw, 'present') ?? status.present,
+    overstayMinutes: pickNumber(raw, 'overstayMinutes'),
   };
 }
 

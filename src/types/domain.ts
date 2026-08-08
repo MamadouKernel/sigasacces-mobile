@@ -73,6 +73,8 @@ export interface OfflineVisit {
   present: boolean;
   entreeAt?: number;
   exited?: boolean;
+  /** Minutes de dépassement de la durée prévue (0 si absent/pas en dépassement) — §7. */
+  overstayMinutes?: number;
 }
 
 export interface PendingScan {
