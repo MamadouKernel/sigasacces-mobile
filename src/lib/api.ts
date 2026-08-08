@@ -316,17 +316,20 @@ function parseAccessMode(raw: string | undefined): AccessMode {
   return value.includes('30') || value.includes('recurr') ? '30j' : 'unique';
 }
 
-// Vocabulaire serveur : « attendu », « sur site », « sorti », « révoqué »,
-// « non venu ». La présence est portée par le statut, pas par un champ à part.
+// Le serveur envoie le nom BRUT de l'enum VisitStatus (C#, .ToString()) :
+// "Valid" | "Consumed" | "Revoked" | "Expired" (Domain/Enums/VisitStatus.cs)
+// -- PAS de libellé français ("sorti", "consommé"...). Un ancien parseur
+// cherchait des mots français qui ne correspondaient jamais à ces valeurs,
+// faisant retomber Consumed/Revoked sur le cas par défaut "valide" : un
+// visiteur reparti (Consumed, plus present) semblait alors "non venu" une
+// fois sa fenêtre dépassée, au lieu de "SORTI" (régression du 08/08/2026).
+// La présence réelle vient du champ `present`/`isOnSite` dédié, pas d'ici.
 function parseVisitStatus(raw: string | undefined): { statut: VisitStatus; present: boolean } {
   const value = (raw ?? '').toLowerCase();
-  if (value.includes('revoq') || value.includes('révoq')) {
-    return { statut: 'revoque', present: false };
-  }
-  if (value.includes('sur site')) return { statut: 'valide', present: true };
-  if (value.includes('sorti') || value.includes('consom')) {
-    return { statut: 'consomme', present: false };
-  }
+  if (value === 'revoked') return { statut: 'revoque', present: false };
+  if (value === 'consumed') return { statut: 'consomme', present: false };
+  // "valid", "expired" (ne devrait jamais apparaître ici -- filtré côté
+  // serveur), ou toute valeur inconnue : traité comme encore attendu.
   return { statut: 'valide', present: false };
 }
 
