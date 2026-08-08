@@ -41,6 +41,7 @@ const PENDING_SCANS_KEY = 'sigasacces.pending-scans.v2';
 
 const DENIAL_LABELS: Partial<Record<VerdictCode, { title: string; reason: string }>> = {
   INVALID_SIGNATURE: { title: 'QR INVALIDE', reason: 'SIGNATURE INVALIDE — QR ALTÉRÉ' },
+  INVALID_CODE: { title: 'CODE INCONNU', reason: 'VÉRIFIEZ LA SAISIE AUPRÈS DU VISITEUR' },
   DENIED_Excluded: { title: 'ACCÈS REFUSÉ', reason: 'VOIR POSTE DE GARDE' },
   DENIED_SuspectedDuplicate: { title: 'DÉJÀ SUR SITE', reason: 'SUSPICION DE COPIE — VOIR POSTE DE GARDE' },
   DENIED_CycleAlreadyClosed: { title: 'ACCÈS REFUSÉ', reason: 'CYCLE ENTRÉE/SORTIE CLOS' },
@@ -138,6 +139,7 @@ interface ScanState {
 
   hydrate: () => Promise<void>;
   scanPayload: (payload: string) => Promise<void>;
+  scanManualCode: (code: string) => Promise<void>;
   closeVerdict: () => void;
   toggleDirection: () => void;
   toggleHaptics: () => void;
@@ -300,6 +302,104 @@ export const useScanStore = create<ScanState>((set, get) => ({
       scansToday: s.scansToday + 1,
       journal: [decision.journal, ...s.journal],
     }));
+  },
+
+  // Code de secours (alternative au QR, saisi par l'agent — ManualCodeSheet).
+  // Route et logique dédiées : appeler scanPayload() enverrait le code tapé
+  // à /api/scan comme si c'était un QR signé, échec systématique en
+  // INVALID_SIGNATURE. Contrairement au QR, aucun repli hors-ligne n'existe
+  // (voir ScanManualCodeCommand côté API — résoudre le code EST la
+  // recherche en base, impossible à vérifier localement).
+  scanManualCode: async (code) => {
+    const state = get();
+    if (state.busy || state.verdict) return;
+
+    const { agent, post } = useAuthStore.getState();
+    const agentId = agent?.matricule ?? '—';
+    const now = Date.now();
+
+    if (state.degraded) {
+      const verdict: Verdict = {
+        kind: 'no',
+        code: 'SERVER_ERROR',
+        title: 'HORS LIGNE',
+        who: 'Code de secours indisponible',
+        detail: 'Le code de secours nécessite une connexion au serveur.',
+        reason: 'CONNEXION REQUISE',
+        degraded: true,
+        securityEvent: false,
+      };
+      feedback('no', state.haptics);
+      set((s) => ({
+        verdict,
+        scansToday: s.scansToday + 1,
+        journal: [
+          { t: now, nom: 'Code de secours', agent: agentId, ok: false, det: 'Tentative hors ligne — connexion requise', deg: true, sec: false },
+          ...s.journal,
+        ],
+      }));
+      return;
+    }
+
+    set({ busy: true });
+    try {
+      const result = await api.scanManualCode(code, state.direction, post?.checkpointId ?? '');
+      const verdict = verdictFromServer(result);
+      feedback(verdict.kind, state.haptics);
+      set((s) => ({
+        busy: false,
+        verdict,
+        scansToday: s.scansToday + 1,
+        journal: [
+          {
+            t: now,
+            nom: result.visitorName ?? 'Visiteur',
+            agent: agentId,
+            ok: result.isGranted || result.isCheckOut,
+            out: result.isCheckOut,
+            det: `${result.verdictCode} · code de secours${result.overstayMinutes ? ` · dépassement +${fmtDur(result.overstayMinutes)}` : ''}`,
+            deg: false,
+            sec: result.isSecurityEvent,
+          },
+          ...s.journal,
+        ],
+      }));
+    } catch (err) {
+      if (err instanceof NetworkError) {
+        const verdict: Verdict = {
+          kind: 'no',
+          code: 'SERVER_ERROR',
+          title: 'SERVICE INDISPONIBLE',
+          who: 'Code de secours',
+          detail: 'Réessayez dans un instant.',
+          reason: 'CONNEXION REQUISE',
+          degraded: true,
+          securityEvent: false,
+        };
+        feedback('no', state.haptics);
+        set((s) => ({
+          busy: false,
+          degraded: true,
+          verdict,
+          scansToday: s.scansToday + 1,
+          journal: [
+            { t: now, nom: 'Code de secours', agent: agentId, ok: false, det: 'Panne réseau pendant la vérification', deg: true, sec: false },
+            ...s.journal,
+          ],
+        }));
+      } else {
+        const verdict = verdictFromFailure(errorMessage(err));
+        feedback('no', state.haptics);
+        set((s) => ({
+          busy: false,
+          verdict,
+          journal: [
+            { t: now, nom: 'Contrôle non abouti', agent: agentId, ok: false, det: `Échec du contrôle serveur : ${errorMessage(err)}`, deg: false, sec: false },
+            ...s.journal,
+          ],
+        }));
+      }
+    }
   },
 
   closeVerdict: () => set({ verdict: null }),

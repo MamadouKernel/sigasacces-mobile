@@ -13,7 +13,7 @@ interface Props {
 
 export function ManualCodeSheet({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
-  const scanPayload = useScanStore((s) => s.scanPayload);
+  const scanManualCode = useScanStore((s) => s.scanManualCode);
   const busy = useScanStore((s) => s.busy);
   const direction = useScanStore((s) => s.direction);
   const [code, setCode] = useState('');
@@ -23,7 +23,7 @@ export function ManualCodeSheet({ visible, onClose }: Props) {
     if (!trimmed) return;
     setCode('');
     onClose();
-    void scanPayload(trimmed);
+    void scanManualCode(trimmed);
   };
 
   const handleClose = () => {
@@ -40,9 +40,9 @@ export function ManualCodeSheet({ visible, onClose }: Props) {
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>VÉRIFICATION MANUELLE</Text>
+              <Text style={styles.title}>CODE DE SECOURS</Text>
               <Text style={styles.subtitle}>
-                Saisie manuelle pour visiteur sans QR code ({isEntry ? 'ENTRÉE' : 'SORTIE'})
+                Alternative au QR — visiteur sans téléphone ({isEntry ? 'ENTRÉE' : 'SORTIE'})
               </Text>
             </View>
             <Pressable onPress={handleClose} style={styles.close} hitSlop={8}>
@@ -51,22 +51,22 @@ export function ManualCodeSheet({ visible, onClose }: Props) {
           </View>
 
           <View style={styles.body}>
-            <Text style={styles.label}>CODE BILLET OU IDENTIFIANT</Text>
+            <Text style={styles.label}>CODE REÇU PAR LE VISITEUR</Text>
             <TextInput
               value={code}
               onChangeText={setCode}
-              placeholder="Ex: TKT-12345, VIS-7890 ou nom..."
+              placeholder="Ex: ABCD-2345"
               placeholderTextColor={colors.muted}
               style={styles.input}
               autoCapitalize="characters"
               autoCorrect={false}
               returnKeyType="go"
               onSubmitEditing={submit}
-              accessibilityLabel="Code billet ou identifiant visiteur"
+              accessibilityLabel="Code de secours du visiteur"
             />
             <Text style={styles.hint}>
-              Utilisez cette option si le smartphone du visiteur est déchargé ou si le QR code
-              est illisible par la caméra.
+              Le visiteur trouve ce code dans l&apos;email d&apos;invitation, sous le QR. À utiliser
+              si son téléphone est déchargé ou si le QR est illisible par la caméra.
             </Text>
 
             <Button

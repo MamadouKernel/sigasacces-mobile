@@ -580,6 +580,21 @@ export const api = {
     );
   },
 
+  // Code de secours (alternative au QR, visiteur sans téléphone fonctionnel) —
+  // route DISTINCTE de /api/scan : le code n'est pas un JWT signé, l'envoyer à
+  // /api/scan échouerait toujours en INVALID_SIGNATURE. TOUJOURS en ligne,
+  // aucun repli hors-ligne (voir ScanManualCodeCommand côté API : résoudre le
+  // code EST la recherche en base, impossible à vérifier localement).
+  async scanManualCode(code: string, direction: Direction, checkpointId: string): Promise<ScanResult> {
+    return parseScanResult(
+      await request<unknown>('POST', '/api/scan/manual-code', {
+        code,
+        direction: toApiDirection(direction),
+        checkpointId,
+      }),
+    );
+  },
+
   // /api/agent/resync sert l'app MAUI historique et attend un autre corps de
   // requête : c'est /api/scan/sync qui est la route du contrat React Native.
   // Le corps est un tableau nu, pas un objet enveloppant. 409 n'est pas une
