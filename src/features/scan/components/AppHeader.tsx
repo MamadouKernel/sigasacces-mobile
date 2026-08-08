@@ -9,9 +9,10 @@ import { colors, font, radius, spacing } from '@/theme/tokens';
 
 interface Props {
   onOpenList: () => void;
+  onOpenManual: () => void;
 }
 
-export function AppHeader({ onOpenList }: Props) {
+export function AppHeader({ onOpenList, onOpenManual }: Props) {
   const { agent, post, logout } = useAuthStore();
   const direction = useScanStore((s) => s.direction);
   const haptics = useScanStore((s) => s.haptics);
@@ -65,6 +66,7 @@ export function AppHeader({ onOpenList }: Props) {
             {isEntry ? '⇢ ENTRÉE' : '⇠ SORTIE'}
           </Text>
         </Pressable>
+        <IconButton label="Saisie ⌨️" onPress={onOpenManual} />
         <IconButton label="Attendus" onPress={onOpenList} />
       </View>
 

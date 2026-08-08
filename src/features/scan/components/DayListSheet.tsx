@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Pill } from '@/components/ui/Pill';
@@ -37,6 +37,8 @@ export function DayListSheet({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const visits = useScanStore((s) => s.visits);
   const degraded = useScanStore((s) => s.degraded);
+  const scanPayload = useScanStore((s) => s.scanPayload);
+  const direction = useScanStore((s) => s.direction);
   const [query, setQuery] = useState('');
 
   const sorted = useMemo(() => {
@@ -49,6 +51,24 @@ export function DayListSheet({ visible, onClose }: Props) {
   const close = () => {
     setQuery('');
     onClose();
+  };
+
+  const handleValidateManual = (visit: OfflineVisit) => {
+    const sens = direction === 'entree' ? 'l’ENTRÉE' : 'la SORTIE';
+    Alert.alert(
+      'Validation manuelle',
+      `Confirmer ${sens} manuelle pour ${visit.nom} ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Valider',
+          onPress: () => {
+            close();
+            void scanPayload(visit.visitId);
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -97,7 +117,9 @@ export function DayListSheet({ visible, onClose }: Props) {
           renderItem={({ item }) => {
             const st = statusOf(item);
             return (
-              <View style={styles.row}>
+              <Pressable
+                style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+                onPress={() => handleValidateManual(item)}>
                 <View style={styles.rowLeft}>
                   <Text style={styles.nom}>{item.nom}</Text>
                   <Text style={styles.meta}>
@@ -108,8 +130,13 @@ export function DayListSheet({ visible, onClose }: Props) {
                         : 'Accès 30 jours ouvrés'}
                   </Text>
                 </View>
-                <Pill label={st.label} color={st.color} />
-              </View>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Pill label={st.label} color={st.color} />
+                  <Text style={{ fontSize: 10, color: colors.amber, fontWeight: '600' }}>
+                    Taper pour valider
+                  </Text>
+                </View>
+              </Pressable>
             );
           }}
         />

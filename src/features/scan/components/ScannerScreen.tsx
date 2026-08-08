@@ -6,6 +6,7 @@ import { AppHeader } from '@/features/scan/components/AppHeader';
 import { DayListSheet } from '@/features/scan/components/DayListSheet';
 import { DegradedBanner } from '@/features/scan/components/DegradedBanner';
 import { FooterBar } from '@/features/scan/components/FooterBar';
+import { ManualCodeSheet } from '@/features/scan/components/ManualCodeSheet';
 import { TopStatusRow } from '@/features/scan/components/TopStatusRow';
 import { VerdictOverlay } from '@/features/scan/components/VerdictOverlay';
 import { Viewfinder } from '@/features/scan/components/Viewfinder';
@@ -21,6 +22,7 @@ export function ScannerScreen() {
   const checkConnectivity = useScanStore((s) => s.checkConnectivity);
   const refreshDayList = useScanStore((s) => s.refreshDayList);
   const [listOpen, setListOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
 
   // seul un appel effectif à l'API fait foi pour basculer en dégradé ou en sortir
   useEffect(() => {
@@ -37,12 +39,15 @@ export function ScannerScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <TopStatusRow />
-      <AppHeader onOpenList={() => setListOpen(true)} />
+      <AppHeader
+        onOpenList={() => setListOpen(true)}
+        onOpenManual={() => setManualOpen(true)}
+      />
       <DegradedBanner />
 
       <View style={styles.stage}>
         <Viewfinder
-          paused={verdict !== null || listOpen}
+          paused={verdict !== null || listOpen || manualOpen}
           onScanned={(payload) => void scanPayload(payload)}
         />
         <VerdictOverlay />
@@ -51,6 +56,7 @@ export function ScannerScreen() {
       <FooterBar />
 
       <DayListSheet visible={listOpen} onClose={() => setListOpen(false)} />
+      <ManualCodeSheet visible={manualOpen} onClose={() => setManualOpen(false)} />
     </SafeAreaView>
   );
 }

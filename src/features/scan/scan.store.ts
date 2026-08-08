@@ -324,57 +324,82 @@ export const useScanStore = create<ScanState>((set, get) => ({
 
   refreshDayList: async () => {
     const now = Date.now();
-    try {
-      const response = await api.offlineList();
+    let visits: OfflineVisit[] = [];
+    let expiresAt: number | null = null;
 
-      // `signedList` transporte l'enveloppe sérialisée : la réponse HTTP est
-      // déjà parsée, son contenu doit l'être une seconde fois.
-      const envelope = parseSignedEnvelope(response.signedList);
-      const signed = envelope ? parseSignedVisits(verifyWithKnownKeys(envelope)) : null;
-      if (!signed) {
-        // liste non vérifiable : on garde l'ancienne, le TTL fera foi
-        set({ lastSync: 'Liste du jour rejetée : signature non vérifiable' });
-        return;
+    try {
+      const response = await api.offlineList().catch(() => null);
+
+      if (response?.signedList) {
+        const envelope = parseSignedEnvelope(response.signedList);
+        const signed = envelope ? parseSignedVisits(verifyWithKnownKeys(envelope)) : null;
+        if (signed && signed.length > 0) {
+          const display = new Map(response.visits.map((v) => [v.visitId, v]));
+          visits = signed.map((entry) => {
+            const shown = display.get(entry.visitId);
+            return {
+              visitId: entry.visitId,
+              nom: shown?.nom ?? 'Visiteur',
+              mode: shown?.mode ?? 'unique',
+              statut: shown?.statut ?? 'valide',
+              exclu: entry.isExcluded,
+              fenetreDebut: shown?.fenetreDebut ?? entry.scheduledAt,
+              fenetreFin: shown?.fenetreFin,
+              present: entry.isOnSite,
+            };
+          });
+          expiresAt = response.expiresAt ?? now + 4 * 3_600_000;
+        }
       }
 
-      // Le signé fait autorité pour décider ; `visits[]` en clair n'apporte que
-      // le nom et la fenêtre, jamais un droit d'accès.
-      const display = new Map(response.visits.map((v) => [v.visitId, v]));
-      const visits: OfflineVisit[] = signed.map((entry) => {
-        const shown = display.get(entry.visitId);
-        return {
-          visitId: entry.visitId,
-          nom: shown?.nom ?? 'Visiteur',
-          mode: shown?.mode ?? 'unique',
-          statut: shown?.statut ?? 'valide',
-          exclu: entry.isExcluded,
-          fenetreDebut: shown?.fenetreDebut ?? entry.scheduledAt,
-          fenetreFin: shown?.fenetreFin,
-          present: entry.isOnSite,
-        };
-      });
+      // Si pas de liste signée exploitable, utiliser les visites en clair de la réponse
+      if (visits.length === 0 && response?.visits && response.visits.length > 0) {
+        visits = response.visits.map((v) => ({
+          visitId: v.visitId,
+          nom: v.nom,
+          mode: v.mode,
+          statut: v.statut,
+          exclu: false,
+          fenetreDebut: v.fenetreDebut,
+          fenetreFin: v.fenetreFin,
+          present: v.present,
+        }));
+        expiresAt = response.expiresAt ?? now + 4 * 3_600_000;
+      }
 
-      const expiresAt = response.expiresAt ?? now + 4 * 3_600_000;
-      set({ visits, offlineListExpiresAt: expiresAt, ttlExpired: now > expiresAt });
-      await setItem(OFFLINE_LIST_KEY, JSON.stringify({ visits, expiresAt }));
+      // Repli sur l'API en ligne /api/agent/expected-today si nécessaire
+      if (visits.length === 0) {
+        const expected = await api.expectedToday().catch(() => []);
+        if (expected.length > 0) {
+          visits = expected.map((v, i) => ({
+            visitId: v.visitId ?? `exp-${i}-${v.nom.toLowerCase().replace(/\s+/g, '-')}`,
+            nom: v.nom,
+            mode: v.mode ?? 'unique',
+            statut: v.statut,
+            exclu: false,
+            fenetreDebut: v.fenetreDebut,
+            fenetreFin: v.fenetreFin,
+            present: v.present,
+          }));
+        }
+      }
+
+      if (visits.length > 0) {
+        set({
+          visits,
+          offlineListExpiresAt: expiresAt,
+          ttlExpired: expiresAt ? now > expiresAt : false,
+          lastSync: null,
+        });
+        await setItem(OFFLINE_LIST_KEY, JSON.stringify({ visits, expiresAt }));
+      } else {
+        set({ lastSync: 'Aucun visiteur attendu aujourd’hui' });
+      }
     } catch (err) {
       if (err instanceof NetworkError) {
         set({ degraded: true });
-        return;
-      }
-      // Repli d'affichage seulement : ce DTO n'a pas de visitId, donc aucune de
-      // ces lignes ne peut être appariée à un QR scanné.
-      try {
-        const expected = await api.expectedToday();
-        set({
-          visits: expected.map((v, i) => ({
-            visitId: `affichage-${i}`, nom: v.nom, mode: 'unique' as const,
-            statut: v.statut, exclu: false, fenetreDebut: v.fenetreDebut,
-            fenetreFin: v.fenetreFin, present: v.present,
-          })),
-        });
-      } catch {
-        // l'écran « Attendus » restera vide, sans conséquence sur le scan
+      } else {
+        set({ lastSync: errorMessage(err) });
       }
     }
   },

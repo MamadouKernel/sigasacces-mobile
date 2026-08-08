@@ -357,9 +357,10 @@ function parseListedVisit(raw: Json): ListedVisit | null {
   };
 }
 
-/** Ni `visitId` ni `mode` dans ce DTO : jamais une base de décision de scan. */
 export interface ExpectedVisitor {
+  visitId?: string;
   nom: string;
+  mode?: AccessMode;
   statut: VisitStatus;
   present: boolean;
   fenetreDebut?: number;
@@ -367,20 +368,22 @@ export interface ExpectedVisitor {
 }
 
 function parseExpectedVisitors(raw: unknown): ExpectedVisitor[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
+  const list = Array.isArray(raw) ? raw : pickArray(asObject(raw) ?? {}, 'visits', 'items', 'visitors', 'data');
+  return list
     .map((item) => asObject(item))
     .filter((item): item is Json => item !== null)
     .map((item): ExpectedVisitor | null => {
-      const nom = pickString(item, 'visitorName');
+      const nom = pickString(item, 'visitorName', 'nom', 'name', 'visitor');
       if (!nom) return null;
-      const status = parseVisitStatus(pickString(item, 'status'));
+      const status = parseVisitStatus(pickString(item, 'status', 'statut'));
       return {
+        visitId: pickString(item, 'visitId', 'id', 'ticketId', 'ticket'),
         nom,
+        mode: parseAccessMode(pickString(item, 'mode')),
         statut: status.statut,
-        present: status.present,
-        fenetreDebut: pickDate(item, 'windowStart'),
-        fenetreFin: pickDate(item, 'windowEnd'),
+        present: pickBool(item, 'present', 'isOnSite', 'isGranted') ?? status.present,
+        fenetreDebut: pickDate(item, 'windowStart', 'fenetreDebut', 'debut'),
+        fenetreFin: pickDate(item, 'windowEnd', 'fenetreFin', 'fin'),
       };
     })
     .filter((v): v is ExpectedVisitor => v !== null);
