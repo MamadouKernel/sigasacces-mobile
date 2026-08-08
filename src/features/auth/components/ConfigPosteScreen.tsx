@@ -39,6 +39,7 @@ export function ConfigPosteScreen() {
   }, [load]);
 
   const checkpoints = siteConfig?.checkpoints ?? [];
+  const effectiveCheckpoint = checkpoint ?? (checkpoints.length === 1 ? checkpoints[0] : null);
   const multiSite = sites.length > 1;
   const siteLabel = siteConfig?.siteLabel ?? soleSiteId(enrollment) ?? sites[0]?.label ?? '—';
 
@@ -49,9 +50,9 @@ export function ConfigPosteScreen() {
   };
 
   const submit = () => {
-    if (!checkpoint) return;
-    configurePost(checkpoint);
-    // liste signée chargée dès l'ouverture : c'est elle qui validera hors ligne
+    if (!effectiveCheckpoint) return;
+    configurePost(effectiveCheckpoint);
+    // liste signée chargée tout de suite : c'est elle qui validera hors ligne
     void refreshDayList();
     router.replace('/scanner');
   };
@@ -107,7 +108,7 @@ export function ConfigPosteScreen() {
             </Text>
           ) : (
             checkpoints.map((point) => {
-              const selected = checkpoint?.id === point.id;
+              const selected = effectiveCheckpoint?.id === point.id;
               return (
                 <Pressable
                   key={point.id}
@@ -133,7 +134,7 @@ export function ConfigPosteScreen() {
           label="Ouvrir le poste"
           variant="accent"
           onPress={submit}
-          disabled={!checkpoint || busy}
+          disabled={!effectiveCheckpoint || busy}
         />
         {error || checkpoints.length === 0 ? (
           <Button label="Réessayer" onPress={() => void load()} disabled={busy} />

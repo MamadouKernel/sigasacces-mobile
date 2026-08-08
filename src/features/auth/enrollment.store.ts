@@ -21,9 +21,9 @@ import { deleteItem, getItem, setItem } from '@/lib/storage';
 // Suffixe de version : un enrôlement écrit avant la spec du 05/08/2026 portait
 // un jeton Bearer là où le serveur attend une clé X-Api-Key. Le relire mènerait
 // à des 401 en boucle — mieux vaut forcer un réenrôlement.
-const ENROLLMENT_KEY = 'novacces.enrollment.v2';
+const ENROLLMENT_KEY = 'sigasacces.enrollment.v2';
 // Clé privée stockée à part : elle ne doit jamais transiter.
-const DEVICE_KEY = 'novacces.device-private-key.v2';
+const DEVICE_KEY = 'sigasacces.device-private-key.v2';
 
 export interface StoredEnrollment {
   deviceInstanceId: string;
@@ -38,8 +38,9 @@ export interface StoredEnrollment {
   publicKeys: Record<string, string>;
 }
 
-// Message vérifié côté serveur : UTF8.GetBytes($"{ticket}|{deviceInstanceId}"),
-// signé en ES256 P1363 puis encodé en Base64URL (DeviceEnrollmentEndpoints.cs).
+// Message de preuve de possession (ProofSignature) selon la spec OpenAPI :
+// Signe {ticket}|{deviceInstanceId} (UTF-8, séparateur '|' littéral) en ES256,
+// signature IEEE P1363 (r||s), encodée en Base64URL.
 function buildProofMessage(ticket: string, deviceInstanceId: string): string {
   return `${ticket}|${deviceInstanceId}`;
 }

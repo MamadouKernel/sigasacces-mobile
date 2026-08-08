@@ -1,8 +1,8 @@
-# NOVACCÈS — Application agent (Expo React Native)
+# SIGASACCÈS — Application agent (Expo React Native)
 
 Application du poste de contrôle : scan caméra des QR visiteurs, verdict plein
 écran, poste directionnel entrée/sortie, liste des attendus du jour, mode
-dégradé. Fidèle à la maquette `maquette_novacces.html` (vue « App agent »).
+dégradé.
 
 L'application est branchée sur l'API de production `NovAcces.Api` et ne contient
 aucune donnée de démonstration : sans terminal enrôlé et sans serveur joignable,

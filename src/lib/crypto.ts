@@ -119,7 +119,7 @@ export function base64UrlToBytes(input: string): Uint8Array {
   return base64ToBytes(input.replace(/-/g, '+').replace(/_/g, '/'));
 }
 
-function utf8ToBytes(text: string): Uint8Array {
+export function utf8ToBytes(text: string): Uint8Array {
   const out: number[] = [];
   for (let i = 0; i < text.length; i++) {
     let c = text.charCodeAt(i);

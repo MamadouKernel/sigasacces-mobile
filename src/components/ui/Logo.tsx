@@ -6,7 +6,7 @@ import { colors } from '@/theme/tokens';
 export function Logo({ size = 18 }: { size?: number }) {
   return (
     <Text style={[styles.logo, { fontSize: size }]}>
-      NOV<Text style={styles.accent}>ACCÈS</Text>
+      SIGAS<Text style={styles.accent}>ACCÈS</Text>
     </Text>
   );
 }

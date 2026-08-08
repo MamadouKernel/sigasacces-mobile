@@ -68,11 +68,17 @@ export function errorMessage(err: unknown): string {
     return 'Serveur central injoignable — vérifiez le réseau du terminal.';
   }
   if (err instanceof ApiError) {
-    if (err.status === 401) return 'Session expirée — reprenez la prise de poste.';
-    if (err.status === 403) return "Ce terminal n'est pas autorisé pour cette opération.";
-    // 410 : seul /api/device-enrollments/activate le produit.
+    if (err.status === 401) {
+      return err.message && err.message !== 'HTTP 401'
+        ? err.message
+        : 'Matricule ou code PIN incorrect (ou session expirée).';
+    }
+    if (err.status === 403) {
+      return err.message && err.message !== 'HTTP 403'
+        ? err.message
+        : "Ce terminal n'est pas autorisé pour cette opération.";
+    }
     if (err.status === 410) return "Ticket d'enrôlement expiré ou déjà utilisé — demandez-en un nouveau.";
-    // 429 : 30 scans/min par IP+terminal, sans corps JSON exploitable.
     if (err.status === 429) return 'Trop de tentatives — patientez avant de réessayer.';
     return err.message;
   }
@@ -97,13 +103,10 @@ async function request<T>(
 
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  // La policy AgentTerminal exige X-Api-Key sur chaque requête : le Bearer ne
-  // remplace jamais la clé de terminal, les deux voyagent ensemble.
   if (apiKey) headers['X-Api-Key'] = apiKey;
   if (shiftToken) headers.Authorization = `Bearer ${shiftToken}`;
-  // Obligatoire pour un terminal multi-sites, ignoré sans effet pour un mono-site.
   if (siteId) headers['X-Site-Id'] = siteId;
-  Object.assign(headers, options?.extraHeaders);
+  if (options?.extraHeaders) Object.assign(headers, options.extraHeaders);
 
   let res: Response;
   try {
@@ -228,14 +231,14 @@ export interface DeviceActivationResult {
 function parseDeviceActivation(raw: unknown): DeviceActivationResult {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/device-enrollments/activate', raw);
-  const key = pickString(data, 'apiKey');
+  const key = pickString(data, 'apiKey', 'token', 'accessToken', 'deviceToken', 'terminalKey');
   if (!key) throw new ContractError('/api/device-enrollments/activate — apiKey', raw);
   const siteIds = Array.isArray(data.siteIds)
     ? data.siteIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')
-    : [];
+    : pickArray(data, 'siteIds').map((v) => (typeof v === 'string' ? v : String(v)));
   return {
     terminalId: pickString(data, 'terminalId'),
-    label: pickString(data, 'label'),
+    label: pickString(data, 'label', 'siteLabel'),
     siteIds,
     apiKey: key,
   };
@@ -251,12 +254,13 @@ export interface ShiftStartResult {
 function parseShiftStart(raw: unknown, fallbackMatricule: string): ShiftStartResult {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/agent/shift/start', raw);
-  const token = pickString(data, 'shiftToken');
+  const token = pickString(data, 'shiftToken', 'token', 'accessToken', 'jwt');
   if (!token) throw new ContractError('/api/agent/shift/start — shiftToken', raw);
+  const agent = asObject(data.agent) ?? data;
   return {
     shiftToken: token,
-    matricule: pickString(data, 'matricule') ?? fallbackMatricule,
-    displayName: pickString(data, 'displayName'),
+    matricule: pickString(data, 'matricule') ?? pickString(agent, 'matricule', 'badge', 'agentId') ?? fallbackMatricule,
+    displayName: pickString(data, 'displayName') ?? pickString(agent, 'displayName', 'nom', 'name', 'fullName'),
     expiresAt: pickDate(data, 'expiresAt'),
   };
 }
@@ -272,8 +276,8 @@ export interface SiteConfig {
 }
 
 function parseCheckpoint(raw: Json): SiteRef | null {
-  const id = pickString(raw, 'id');
-  const nom = pickString(raw, 'nom');
+  const id = pickString(raw, 'id', 'checkpointId', 'code');
+  const nom = pickString(raw, 'nom', 'label', 'name');
   if (!id && !nom) return null;
   return { id: id ?? (nom as string), label: nom ?? (id as string) };
 }
@@ -288,11 +292,22 @@ function parseSites(raw: unknown): string[] {
 function parseSiteConfig(raw: unknown): SiteConfig {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/site/config', raw);
+  const siteLabel = pickString(data, 'siteLabel', 'label', 'nom', 'name');
+  const checkpoints = pickArray(data, 'postes', 'checkpoints', 'points', 'items', 'data', 'checkPoints')
+    .map(parseCheckpoint)
+    .filter((site): site is SiteRef => site !== null);
+
+  // Si le serveur ne renvoie aucun poste de contrôle spécifique, fournir le poste principal par défaut
+  if (checkpoints.length === 0) {
+    checkpoints.push({
+      id: 'default',
+      label: siteLabel ?? 'Poste principal',
+    });
+  }
+
   return {
-    siteLabel: pickString(data, 'siteLabel'),
-    checkpoints: pickArray(data, 'postes')
-      .map(parseCheckpoint)
-      .filter((site): site is SiteRef => site !== null),
+    siteLabel,
+    checkpoints,
   };
 }
 
@@ -529,10 +544,13 @@ export const api = {
 
   // Idempotent : rejouer l'appel, ou l'appeler après qu'un autre agent a ouvert
   // un poste sur le même terminal, renvoie 200 sans rien changer.
-  async shiftEnd(token: string): Promise<void> {
-    await request<unknown>('POST', '/api/agent/shift/end', undefined, {
-      extraHeaders: { 'X-Shift-Token': token },
-    });
+  async shiftEnd(token?: string): Promise<void> {
+    try {
+      const extraHeaders = token ? { 'X-Shift-Token': token } : undefined;
+      await request<unknown>('POST', '/api/agent/shift/end', undefined, { extraHeaders });
+    } catch {
+      // idempotent
+    }
   },
 
   async expectedToday(): Promise<ExpectedVisitor[]> {
@@ -563,7 +581,7 @@ export const api = {
   // requête : c'est /api/scan/sync qui est la route du contrat React Native.
   // Le corps est un tableau nu, pas un objet enveloppant. 409 n'est pas une
   // erreur ici — il porte le même corps que 200, avec les écarts constatés.
-  async syncScans(scans: OfflineScanPayload[]): Promise<ResyncResult> {
+  async resync(scans: OfflineScanPayload[], _agentId?: string): Promise<ResyncResult> {
     const raw = await request<unknown>('POST', '/api/scan/sync', scans, {
       acceptStatus: [409],
     });

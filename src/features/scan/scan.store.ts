@@ -36,8 +36,8 @@ import type {
 
 // Suffixe de version : le schéma des deux caches a changé avec la spec du
 // 05/08/2026, une entrée écrite avant serait relue de travers.
-const OFFLINE_LIST_KEY = 'novacces.offline-list.v2';
-const PENDING_SCANS_KEY = 'novacces.pending-scans.v2';
+const OFFLINE_LIST_KEY = 'sigasacces.offline-list.v2';
+const PENDING_SCANS_KEY = 'sigasacces.pending-scans.v2';
 
 const DENIAL_LABELS: Partial<Record<VerdictCode, { title: string; reason: string }>> = {
   INVALID_SIGNATURE: { title: 'QR INVALIDE', reason: 'SIGNATURE INVALIDE — QR ALTÉRÉ' },
@@ -391,8 +391,9 @@ export const useScanStore = create<ScanState>((set, get) => ({
       offlineVerdict: p.offlineVerdict,
     }));
 
+    const agentId = useAuthStore.getState().agent?.matricule;
     try {
-      const result = await api.syncScans(payload);
+      const result = await api.resync(payload, agentId);
       const conflicts: JournalEntry[] = result.conflicts.map((c) => ({
         t: Date.now(),
         nom: get().visits.find((v) => v.visitId === c.visitId)?.nom ?? 'Visite',

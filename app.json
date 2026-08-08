@@ -1,20 +1,21 @@
 {
   "expo": {
-    "name": "novacces-agent",
-    "slug": "novacces-agent",
+    "name": "SIGASACCÈS",
+    "slug": "sigasacces-agent",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "novaccesagent",
+    "scheme": "sigasaccesagent",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.moasko2.novaccesagent",
+      "bundleIdentifier": "com.moasko2.sigasaccesagent",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.moasko2.sigasaccesagent",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -22,7 +23,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.agent.sigasacces"
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -33,7 +37,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "NOVACCÈS utilise la caméra pour scanner les QR Codes des visiteurs au poste de contrôle."
+          "cameraPermission": "SIGASACCÈS utilise la caméra pour scanner les QR Codes des visiteurs au poste de contrôle."
         }
       ],
       [
@@ -54,7 +58,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "da83b711-ec51-4993-ae6a-5f892326decb"
+        "projectId": "b8d6c444-9bd9-4154-a462-64d22db7f48b"
       }
     }
   }
