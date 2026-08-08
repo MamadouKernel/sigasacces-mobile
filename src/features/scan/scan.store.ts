@@ -133,6 +133,12 @@ interface ScanState {
   ttlExpired: boolean;
   offlineListExpiresAt: number | null;
   pending: PendingScan[];
+  // Visites avec une demande de confirmation sûreté en attente (tap
+  // « Attendus » sans QR/code) — visitId -> expiration (miroir du délai
+  // serveur, 15 min). État local uniquement, jamais persisté : purgé à
+  // l'expiration ou dès que la visite passe présente/sortie (issue réelle
+  // constatée) lors d'un rafraîchissement de la liste.
+  pendingConfirmations: Map<string, number>;
   haptics: boolean;
   verdict: Verdict | null;
   lastSync: string | null;
@@ -141,6 +147,7 @@ interface ScanState {
   hydrate: () => Promise<void>;
   scanPayload: (payload: string) => Promise<void>;
   scanManualCode: (code: string) => Promise<void>;
+  requestConfirmation: (visit: OfflineVisit) => Promise<{ ok: boolean; error?: string }>;
   closeVerdict: () => void;
   toggleDirection: () => void;
   toggleHaptics: () => void;
@@ -167,6 +174,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
   ttlExpired: false,
   offlineListExpiresAt: null,
   pending: [],
+  pendingConfirmations: new Map<string, number>(),
   haptics: true,
   verdict: null,
   lastSync: null,
@@ -414,6 +422,48 @@ export const useScanStore = create<ScanState>((set, get) => ({
     }
   },
 
+  // Validation SANS QR ni code (liste « Attendus ») — n'accorde PAS l'accès :
+  // ouvre une demande que la sûreté doit confirmer depuis le portail Web (voir
+  // DayListSheet.tsx). Remplace l'ancien appel à scanPayload(visit.visitId),
+  // toujours refusé INVALID_SIGNATURE (un visitId brut n'est pas un QR signé).
+  requestConfirmation: async (visit) => {
+    const { post } = useAuthStore.getState();
+    const state = get();
+    if (state.pendingConfirmations.has(visit.visitId)) return { ok: true };
+
+    try {
+      const result = await api.createConfirmationRequest(
+        visit.visitId,
+        state.direction,
+        post?.checkpointId ?? '',
+      );
+      set((s) => {
+        const next = new Map(s.pendingConfirmations);
+        next.set(visit.visitId, result.expiresAt);
+        return { pendingConfirmations: next };
+      });
+      set((s) => ({
+        journal: [
+          {
+            t: Date.now(),
+            nom: visit.nom,
+            agent: useAuthStore.getState().agent?.matricule ?? '—',
+            ok: false,
+            det: result.alreadyPending
+              ? 'Demande de confirmation déjà en attente auprès de la sûreté'
+              : 'Demande de confirmation envoyée à la sûreté (sans QR/code)',
+            deg: false,
+            sec: false,
+          },
+          ...s.journal,
+        ],
+      }));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: errorMessage(err) };
+    }
+  },
+
   closeVerdict: () => set({ verdict: null }),
 
   toggleDirection: () =>
@@ -504,6 +554,21 @@ export const useScanStore = create<ScanState>((set, get) => ({
         }
       }
 
+      // Purge des demandes de confirmation résolues : expirées (miroir du
+      // délai serveur) OU dont la visite est désormais présente/sortie (issue
+      // réelle constatée). Un refus explicite avant expiration ne change pas
+      // le statut de la visite — la purge attend alors le délai, comme le
+      // ferait la sûreté en ne répondant pas (même sémantique).
+      const stillVisiting = new Map(visits.map((v) => [v.visitId, v]));
+      const prunedConfirmations = new Map(
+        [...get().pendingConfirmations].filter(([visitId, expiresAt]) => {
+          if (now > expiresAt) return false;
+          const visit = stillVisiting.get(visitId);
+          if (visit && (visit.present || visit.exited)) return false;
+          return true;
+        }),
+      );
+
       if (visits.length > 0) {
         // Dépassement NOUVEAU (0 → >0 depuis le dernier rafraîchissement) :
         // alerte l'agent au poste, pas seulement visible s'il ouvre la liste.
@@ -520,10 +585,11 @@ export const useScanStore = create<ScanState>((set, get) => ({
           offlineListExpiresAt: expiresAt,
           ttlExpired: expiresAt ? now > expiresAt : false,
           lastSync: null,
+          pendingConfirmations: prunedConfirmations,
         });
         await setItem(OFFLINE_LIST_KEY, JSON.stringify({ visits, expiresAt }));
       } else {
-        set({ lastSync: 'Aucun visiteur attendu aujourd’hui' });
+        set({ lastSync: 'Aucun visiteur attendu aujourd’hui', pendingConfirmations: prunedConfirmations });
       }
     } catch (err) {
       if (err instanceof NetworkError) {
@@ -604,6 +670,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
     set({
       visits: [], journal: [], scansToday: 0, direction: 'entree', degraded: false,
       ttlExpired: false, offlineListExpiresAt: null, pending: [], verdict: null, lastSync: null,
+      pendingConfirmations: new Map<string, number>(),
     }),
 }));
 

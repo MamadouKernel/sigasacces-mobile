@@ -474,6 +474,24 @@ export interface ScanResult {
   overstayMinutes?: number;
 }
 
+// Réponse de POST /api/agent/confirmation-requests — n'accorde PAS l'accès,
+// ouvre seulement une demande que la sûreté doit confirmer depuis le portail
+// Web (voir ScanConfirmationRequest côté API).
+export interface ConfirmationRequestCreated {
+  requestId: string;
+  expiresAt: number;
+  alreadyPending: boolean;
+}
+
+function parseConfirmationRequestCreated(raw: unknown): ConfirmationRequestCreated {
+  const data = asObject(raw);
+  if (!data) throw new ContractError('/api/agent/confirmation-requests', raw);
+  const requestId = pickString(data, 'requestId');
+  const expiresAt = pickDate(data, 'expiresAt');
+  if (!requestId || !expiresAt) throw new ContractError('/api/agent/confirmation-requests', raw);
+  return { requestId, expiresAt, alreadyPending: pickBool(data, 'alreadyPending') ?? false };
+}
+
 function parseScanResult(raw: unknown): ScanResult {
   const data = asObject(raw);
   if (!data) throw new ContractError('/api/scan', raw);
@@ -571,6 +589,16 @@ export const api = {
     }
   },
 
+  // Purement informatif (console Admin, distinguer quel boîtier physique
+  // correspond à quel terminal) — jamais un mécanisme de sécurité.
+  async setDeviceInfo(deviceModel: string): Promise<void> {
+    try {
+      await request<unknown>('POST', '/api/agent/device-info', { deviceModel });
+    } catch {
+      // best-effort : la prise de poste ne doit jamais échouer pour ça
+    }
+  },
+
   async expectedToday(): Promise<ExpectedVisitor[]> {
     return parseExpectedVisitors(await request<unknown>('GET', '/api/agent/expected-today'));
   },
@@ -604,6 +632,24 @@ export const api = {
     return parseScanResult(
       await request<unknown>('POST', '/api/scan/manual-code', {
         code,
+        direction: toApiDirection(direction),
+        checkpointId,
+      }),
+    );
+  },
+
+  // Validation SANS QR ni code (liste « Attendus », visiteur sans téléphone
+  // fonctionnel) — n'accorde PAS l'accès, ouvre une demande que la sûreté doit
+  // confirmer depuis le portail Web. Remplace l'ancien appel à scan() avec un
+  // visitId brut, toujours refusé INVALID_SIGNATURE (corrigé le 08/08/2026).
+  async createConfirmationRequest(
+    visitId: string,
+    direction: Direction,
+    checkpointId: string,
+  ): Promise<ConfirmationRequestCreated> {
+    return parseConfirmationRequestCreated(
+      await request<unknown>('POST', '/api/agent/confirmation-requests', {
+        visitId,
         direction: toApiDirection(direction),
         checkpointId,
       }),

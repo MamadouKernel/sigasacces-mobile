@@ -10,6 +10,7 @@ import {
   type SiteConfig,
   type SiteRef,
 } from '@/lib/api';
+import { reportDeviceInfoAsync } from '@/lib/deviceInfo';
 import { registerForPushNotificationsAsync } from '@/lib/pushToken';
 import type { Agent, PostConfig } from '@/types/domain';
 
@@ -51,6 +52,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Non bloquant : la prise de poste ne doit jamais attendre après la
       // permission système ni le service push d'Expo (§7).
       void registerForPushNotificationsAsync();
+      void reportDeviceInfoAsync();
       return { ok: true };
     } catch (err) {
       set({ busy: false });

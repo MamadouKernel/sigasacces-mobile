@@ -37,7 +37,8 @@ export function DayListSheet({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const visits = useScanStore((s) => s.visits);
   const degraded = useScanStore((s) => s.degraded);
-  const scanPayload = useScanStore((s) => s.scanPayload);
+  const pendingConfirmations = useScanStore((s) => s.pendingConfirmations);
+  const requestConfirmation = useScanStore((s) => s.requestConfirmation);
   const direction = useScanStore((s) => s.direction);
   const [query, setQuery] = useState('');
 
@@ -54,17 +55,30 @@ export function DayListSheet({ visible, onClose }: Props) {
   };
 
   const handleValidateManual = (visit: OfflineVisit) => {
+    if (pendingConfirmations.has(visit.visitId)) {
+      Alert.alert(
+        'Confirmation déjà demandée',
+        `Une demande pour ${visit.nom} est déjà en attente de la sûreté.`,
+      );
+      return;
+    }
+
     const sens = direction === 'entree' ? 'l’ENTRÉE' : 'la SORTIE';
     Alert.alert(
-      'Validation manuelle',
-      `Confirmer ${sens} manuelle pour ${visit.nom} ?`,
+      'Demande de confirmation',
+      `Envoyer une demande de confirmation de ${sens} pour ${visit.nom} à la sûreté ? ` +
+        `Le visiteur ne sera pas laissé entrer/sortir sans sa validation.`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Valider',
-          onPress: () => {
-            close();
-            void scanPayload(visit.visitId);
+          text: 'Envoyer',
+          onPress: async () => {
+            const { ok, error } = await requestConfirmation(visit);
+            if (ok) {
+              Alert.alert('Demande envoyée', 'La sûreté a été notifiée — en attente de sa confirmation.');
+            } else {
+              Alert.alert('Échec', error ?? 'Service indisponible, réessayez.');
+            }
           },
         },
       ],
@@ -116,6 +130,7 @@ export function DayListSheet({ visible, onClose }: Props) {
           }
           renderItem={({ item }) => {
             const st = statusOf(item);
+            const isPending = pendingConfirmations.has(item.visitId);
             return (
               <Pressable
                 style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
@@ -132,9 +147,15 @@ export function DayListSheet({ visible, onClose }: Props) {
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
                   <Pill label={st.label} color={st.color} />
-                  <Text style={{ fontSize: 10, color: colors.amber, fontWeight: '600' }}>
-                    Taper pour valider
-                  </Text>
+                  {isPending ? (
+                    <Text style={{ fontSize: 10, color: colors.purple, fontWeight: '600' }}>
+                      En attente de la sûreté…
+                    </Text>
+                  ) : (
+                    <Text style={{ fontSize: 10, color: colors.amber, fontWeight: '600' }}>
+                      Taper pour demander confirmation
+                    </Text>
+                  )}
                 </View>
               </Pressable>
             );
@@ -143,8 +164,8 @@ export function DayListSheet({ visible, onClose }: Props) {
 
         <Text style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
           DONNÉES MINIMALES (moindre privilège) : ni motif, ni coordonnées. Visiteur sans
-          QR (téléphone déchargé) : rechercher son nom ici et demander la validation
-          manuelle à la sûreté.
+          QR (téléphone déchargé) : rechercher son nom ici et taper dessus pour envoyer une
+          demande de confirmation à la sûreté — l&apos;accès n&apos;est jamais accordé sans sa validation.
         </Text>
       </View>
     </Modal>

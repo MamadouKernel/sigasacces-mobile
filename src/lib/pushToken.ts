@@ -17,6 +17,26 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Tout push reçu (dépassement §7, résolution d'une demande de confirmation
+// §8) doit faire réapparaître un état à jour dans la liste « Attendus » —
+// pas de payload structuré distinguant le type de push (voir IExpoPushSender,
+// titre+corps seulement), donc on rafraîchit systématiquement : idempotent et
+// sans effet de bord si rien n'a changé. Listener enregistré UNE SEULE FOIS
+// (garde de module) même si registerForPushNotificationsAsync est rappelée à
+// chaque connexion.
+let receivedListenerRegistered = false;
+function ensureReceivedListener(): void {
+  if (receivedListenerRegistered) return;
+  receivedListenerRegistered = true;
+  Notifications.addNotificationReceivedListener(() => {
+    // Import différé : évite une dépendance circulaire au chargement du module
+    // (scan.store.ts importe des éléments d'auth.store.ts qui importe ce fichier).
+    void import('@/features/scan/scan.store').then(({ useScanStore }) =>
+      useScanStore.getState().refreshDayList(),
+    );
+  });
+}
+
 /**
  * Enregistre ce terminal pour les notifications push (§7 : alerte de
  * dépassement même app FERMÉE — le rafraîchissement local de scan.store.ts
@@ -26,6 +46,8 @@ Notifications.setNotificationHandler({
  */
 export async function registerForPushNotificationsAsync(): Promise<void> {
   try {
+    ensureReceivedListener();
+
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('overstay', {
         name: 'Dépassements de durée',
