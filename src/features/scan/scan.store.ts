@@ -227,6 +227,13 @@ export const useScanStore = create<ScanState>((set, get) => ({
             ...s.journal,
           ],
         }));
+        // La liste "Attendus" (visits) n'est PAS mise à jour par ce scan --
+        // seuls verdict/journal le sont ci-dessus. Sans ce rafraîchissement,
+        // un visiteur qui vient d'entrer/sortir garde son statut d'AVANT le
+        // scan dans la liste (jusqu'au prochain cycle de 15 min), affichant
+        // par ex. "NON VENU" pour quelqu'un qui vient d'être scanné avec
+        // succès. Non bloquant : ne retarde jamais l'affichage du verdict.
+        if (result.isGranted || result.isCheckOut) void get().refreshDayList();
         return;
       } catch (err) {
         if (err instanceof NetworkError) {
@@ -364,6 +371,9 @@ export const useScanStore = create<ScanState>((set, get) => ({
           ...s.journal,
         ],
       }));
+      // Même raison que dans scanPayload : sans ça, la liste "Attendus" garde
+      // le statut d'avant ce scan.
+      if (result.isGranted || result.isCheckOut) void get().refreshDayList();
     } catch (err) {
       if (err instanceof NetworkError) {
         const verdict: Verdict = {
