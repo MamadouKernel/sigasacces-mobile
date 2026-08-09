@@ -629,7 +629,22 @@ export const useScanStore = create<ScanState>((set, get) => ({
         });
         await setItem(OFFLINE_LIST_KEY, JSON.stringify({ visits, expiresAt }));
       } else {
-        set({ lastSync: 'Aucun visiteur attendu aujourd’hui', pendingConfirmations: prunedConfirmations });
+        // Réponse serveur vide = plus personne d'attendu AUJOURD'HUI (ex. après
+        // minuit, avant la première invitation du jour) — ce n'est PAS une
+        // panne (celle-ci est déjà gérée par le catch réseau ci-dessous), donc
+        // ça DOIT remplacer la liste locale, jamais la laisser telle quelle :
+        // sans ce vidage, les visiteurs d'HIER restaient affichés (et
+        // tapables pour une demande de confirmation) indéfiniment tant
+        // qu'aucun nouveau visiteur n'était invité aujourd'hui.
+        const listExpiresAt = response?.expiresAt ?? null;
+        set({
+          visits: [],
+          offlineListExpiresAt: listExpiresAt,
+          ttlExpired: false,
+          lastSync: 'Aucun visiteur attendu aujourd’hui',
+          pendingConfirmations: prunedConfirmations,
+        });
+        await setItem(OFFLINE_LIST_KEY, JSON.stringify({ visits: [], expiresAt: listExpiresAt }));
       }
     } catch (err) {
       if (err instanceof NetworkError) {

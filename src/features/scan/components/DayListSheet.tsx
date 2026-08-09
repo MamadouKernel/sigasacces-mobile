@@ -7,7 +7,7 @@ import { windowState } from '@/features/scan/engine';
 import { useScanStore } from '@/features/scan/scan.store';
 import { fmt } from '@/lib/time';
 import { colors, font, radius, spacing } from '@/theme/tokens';
-import type { OfflineVisit } from '@/types/domain';
+import type { Direction, OfflineVisit } from '@/types/domain';
 
 interface Props {
   visible: boolean;
@@ -31,6 +31,33 @@ function statusOf(visit: OfflineVisit): { label: string; color: string } {
         : 'ATTENDU (30 j)',
     color: colors.greenChip,
   };
+}
+
+/**
+ * Filet de sécurité côté UI : ScanExecutionCore refuserait de toute façon une
+ * demande insensée au moment de l'approbation (cycle clos, hors fenêtre...),
+ * mais laisser l'agent la SOUMETTRE quand même ne ferait qu'envoyer à la
+ * sûreté une notification pour rien — un visiteur déjà SORTI ou dont la
+ * fenêtre est passée n'a pas sa place dans une demande de confirmation
+ * d'ENTRÉE, une visite non présente n'a pas sa place dans une demande de
+ * SORTIE. Même logique que engine.ts (decideOffline), simplifiée en un
+ * simple oui/non — pas de verdict complet à produire ici.
+ */
+function confirmationBlockedReason(visit: OfflineVisit, direction: Direction): string | null {
+  if (visit.statut === 'revoque') return 'Ce QR a été révoqué par la sûreté.';
+
+  if (direction === 'sortie') {
+    if (!visit.present) return "Ce visiteur n'est pas enregistré comme présent sur site.";
+    return null;
+  }
+
+  // direction === 'entree'
+  if (visit.present) return 'Ce visiteur est déjà enregistré comme présent sur site.';
+  if (visit.mode === 'unique' && visit.statut === 'consomme') {
+    return "Cycle entrée/sortie déjà clos pour cette visite (accès à passage unique déjà utilisé).";
+  }
+  if (windowState(visit, Date.now()) === 'late') return 'La fenêtre de validité de cette visite est dépassée.';
+  return null;
 }
 
 export function DayListSheet({ visible, onClose }: Props) {
@@ -60,6 +87,12 @@ export function DayListSheet({ visible, onClose }: Props) {
         'Confirmation déjà demandée',
         `Une demande pour ${visit.nom} est déjà en attente de la sûreté.`,
       );
+      return;
+    }
+
+    const blocked = confirmationBlockedReason(visit, direction);
+    if (blocked) {
+      Alert.alert('Demande impossible', `${visit.nom} — ${blocked}`);
       return;
     }
 
@@ -131,6 +164,7 @@ export function DayListSheet({ visible, onClose }: Props) {
           renderItem={({ item }) => {
             const st = statusOf(item);
             const isPending = pendingConfirmations.has(item.visitId);
+            const blockedReason = isPending ? null : confirmationBlockedReason(item, direction);
             return (
               <Pressable
                 style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
@@ -150,6 +184,10 @@ export function DayListSheet({ visible, onClose }: Props) {
                   {isPending ? (
                     <Text style={{ fontSize: 10, color: colors.purple, fontWeight: '600' }}>
                       En attente de la sûreté…
+                    </Text>
+                  ) : blockedReason ? (
+                    <Text style={{ fontSize: 10, color: colors.muted, fontWeight: '600' }}>
+                      Confirmation non disponible
                     </Text>
                   ) : (
                     <Text style={{ fontSize: 10, color: colors.amber, fontWeight: '600' }}>
