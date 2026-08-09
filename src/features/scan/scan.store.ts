@@ -431,6 +431,15 @@ export const useScanStore = create<ScanState>((set, get) => ({
     const state = get();
     if (state.pendingConfirmations.has(visit.visitId)) return { ok: true };
 
+    // Aucun repli hors ligne possible ici (même raison que scanManualCode,
+    // §9) : contrairement à un QR, il n'y a rien à vérifier localement — la
+    // demande EXIGE une décision humaine en ligne côté sûreté. La mettre en
+    // file pour un renvoi différé donnerait à l'agent l'illusion d'avoir
+    // prévenu la sûreté alors que rien n'a été transmis.
+    if (state.degraded) {
+      return { ok: false, error: 'Connexion au serveur requise pour envoyer une demande de confirmation.' };
+    }
+
     try {
       const result = await api.createConfirmationRequest(
         visit.visitId,
