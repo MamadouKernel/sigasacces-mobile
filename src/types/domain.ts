@@ -75,6 +75,13 @@ export interface OfflineVisit {
   exited?: boolean;
   /** Minutes de dépassement de la durée prévue (0 si absent/pas en dépassement) — §7. */
   overstayMinutes?: number;
+  /**
+   * Empreinte PBKDF2 durcie du code de secours ("v2$..."), issue de la liste
+   * signée — permet sa vérification hors ligne au même titre que le QR
+   * (09/08/2026). Absente si la visite n'a pas de code ou si son empreinte
+   * est encore au format legacy (jamais exposée hors ligne, voir l'API).
+   */
+  manualCodeHash?: string;
 }
 
 export interface PendingScan {
@@ -83,4 +90,6 @@ export interface PendingScan {
   agentId: string;
   occurredAt: number;
   offlineVerdict: VerdictCode;
+  /** Renseigné à la place de signedQrPayload pour un scan par code de secours hors ligne. */
+  manualCode?: string;
 }

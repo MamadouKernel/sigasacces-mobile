@@ -117,6 +117,49 @@ export function decideExpiredQr(ctx: ScanContext): ScanDecision {
   };
 }
 
+// Variantes du code de secours (§9 étendu le 09/08/2026) — même structure que
+// decideListExpired/decideNotInList, wording adapté (ce n'est pas un QR).
+// decideOffline(visit, ctx), lui, reste PARTAGÉ tel quel : une fois la visite
+// résolue (par VisitToken ou par empreinte de code), l'anti-rejeu/exclusion/
+// fenêtre sont IDENTIQUES quel que soit le moyen de preuve présenté.
+export function decideManualCodeListExpired(ctx: ScanContext): ScanDecision {
+  return {
+    verdict: {
+      kind: 'no',
+      code: 'DENIED_OfflineListExpired',
+      title: 'VALIDATION IMPOSSIBLE',
+      who: 'Liste locale expirée',
+      detail: 'Reconnexion requise · diriger le visiteur vers le poste de garde',
+      reason: 'LISTE LOCALE EXPIRÉE (TTL)',
+      degraded: true,
+      securityEvent: false,
+    },
+    patch: {},
+    journal: entry(ctx, 'Code non vérifié', {
+      det: 'Validation hors ligne refusée : liste locale au-delà de son TTL',
+    }),
+  };
+}
+
+export function decideManualCodeNotFound(ctx: ScanContext): ScanDecision {
+  return {
+    verdict: {
+      kind: 'no',
+      code: 'INVALID_CODE',
+      title: 'CODE INCONNU',
+      who: 'Code hors liste locale',
+      detail: 'Hors ligne : ce code ne peut pas être contrôlé · poste de garde',
+      reason: 'HORS LISTE LOCALE',
+      degraded: true,
+      securityEvent: false,
+    },
+    patch: {},
+    journal: entry(ctx, 'Code hors liste', {
+      det: "Code de secours absent de la liste locale signée (mal saisi, visite émise après la coupure, ou empreinte encore au format legacy — vérification serveur impossible)",
+    }),
+  };
+}
+
 export function decideNotInList(ctx: ScanContext): ScanDecision {
   return {
     verdict: {

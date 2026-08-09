@@ -423,6 +423,8 @@ export interface SignedVisit {
   scheduledAt?: number;
   isExcluded: boolean;
   isOnSite: boolean;
+  /** Empreinte durcie du code de secours ("v2$..."), voir OfflineVisit.manualCodeHash. */
+  manualCodeHash?: string;
 }
 
 export function parseSignedVisits(payload: unknown): SignedVisit[] {
@@ -440,6 +442,7 @@ export function parseSignedVisits(payload: unknown): SignedVisit[] {
         scheduledAt: pickDate(item, 'scheduledAt', 'ScheduledAt'),
         isExcluded: pickBool(item, 'isExcluded', 'IsExcluded') ?? false,
         isOnSite: pickBool(item, 'isOnSite', 'IsOnSite') ?? false,
+        manualCodeHash: pickString(item, 'manualCodeHash', 'ManualCodeHash'),
       };
     })
     .filter((v): v is SignedVisit => v !== null);
@@ -516,6 +519,8 @@ export interface OfflineScanPayload {
   agentId: string;
   scannedAtUtc: string;
   offlineVerdict: string;
+  /** Renseigné à la place de signedQrPayload pour un scan par code de secours hors ligne. */
+  manualCode?: string;
 }
 
 export interface ResyncConflict {

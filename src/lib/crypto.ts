@@ -1,4 +1,6 @@
 import { p256 } from '@noble/curves/nist.js';
+import { pbkdf2Async } from '@noble/hashes/pbkdf2.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { requireOptionalNativeModule } from 'expo';
 
 // ES256 (P-256 / SHA-256) en JS pur : identité de l'appareil à l'enrôlement,
@@ -194,6 +196,43 @@ export function pemToPublicKey(pem: string): Uint8Array {
     throw new Error('Clé publique ES256 illisible (point P-256 non compressé attendu).');
   }
   return point;
+}
+
+// Miroir EXACT de NovAcces.Infrastructure.Security.ManualCodeService côté
+// serveur (préfixe, pepper, itérations) — toute divergence romprait la
+// vérification hors ligne du code de secours (§9 étendu le 09/08/2026) sans
+// affecter la vérification en ligne (qui, elle, refait le calcul serveur).
+// pbkdf2Async (pas la variante synchrone) : évite de geler le thread JS
+// pendant ~50k itérations sur un téléphone d'entrée de gamme.
+const MANUAL_CODE_HASH_PREFIX = 'v2$';
+const MANUAL_CODE_PEPPER = 'SigasAcces_ManualCode_Pepper_v2_PBKDF2';
+const MANUAL_CODE_ITERATIONS = 50_000;
+const MANUAL_CODE_KEY_LENGTH = 32;
+
+function normalizeManualCode(rawCode: string): string {
+  return (rawCode ?? '').trim().toUpperCase().replace(/-/g, '').replace(/\s+/g, '');
+}
+
+/**
+ * Calcule l'empreinte durcie d'un code de secours saisi, pour comparaison
+ * hors ligne avec OfflineVisit.manualCodeHash (issu de la liste signée du
+ * jour). Ne calcule QUE le format courant ("v2$") : un code émis avant le
+ * durcissement n'est de toute façon jamais exposé hors ligne (voir
+ * AgentContractEndpoints./offline-list côté serveur) — la comparaison
+ * échouera simplement, laissant retomber sur "code hors liste locale",
+ * comportement correct.
+ */
+export async function computeManualCodeHash(rawCode: string): Promise<string> {
+  const normalized = utf8ToBytes(normalizeManualCode(rawCode));
+  const pepper = utf8ToBytes(MANUAL_CODE_PEPPER);
+  const derived = await pbkdf2Async(sha256, normalized, pepper, {
+    c: MANUAL_CODE_ITERATIONS,
+    dkLen: MANUAL_CODE_KEY_LENGTH,
+  });
+  // Convert.ToHexString() côté .NET produit du hex EN MAJUSCULES — bytesToHex
+  // est en minuscules, sans ce .toUpperCase() la comparaison échouerait
+  // toujours (égalité de chaînes sensible à la casse).
+  return MANUAL_CODE_HASH_PREFIX + bytesToHex(derived).toUpperCase();
 }
 
 export interface DeviceKeyPair {

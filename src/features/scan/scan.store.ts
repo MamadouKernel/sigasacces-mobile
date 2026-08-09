@@ -13,11 +13,13 @@ import {
   type OfflineScanPayload,
   type ScanResult,
 } from '@/lib/api';
-import { parseSignedEnvelope, verifySignedEnvelope, type SignedEnvelope } from '@/lib/crypto';
+import { computeManualCodeHash, parseSignedEnvelope, verifySignedEnvelope, type SignedEnvelope } from '@/lib/crypto';
 import {
   decideExpiredQr,
   decideInvalidSignature,
   decideListExpired,
+  decideManualCodeListExpired,
+  decideManualCodeNotFound,
   decideNotInList,
   decideOffline,
   type ScanContext,
@@ -324,9 +326,11 @@ export const useScanStore = create<ScanState>((set, get) => ({
   // Code de secours (alternative au QR, saisi par l'agent — ManualCodeSheet).
   // Route et logique dédiées : appeler scanPayload() enverrait le code tapé
   // à /api/scan comme si c'était un QR signé, échec systématique en
-  // INVALID_SIGNATURE. Contrairement au QR, aucun repli hors-ligne n'existe
-  // (voir ScanManualCodeCommand côté API — résoudre le code EST la
-  // recherche en base, impossible à vérifier localement).
+  // INVALID_SIGNATURE. Repli hors ligne ajouté le 09/08/2026 : l'empreinte
+  // PBKDF2 durcie du code (voir crypto.ts, computeManualCodeHash) voyage
+  // désormais dans la liste signée du jour (OfflineVisit.manualCodeHash) —
+  // la vérification locale devient possible EXACTEMENT comme pour le QR, en
+  // réutilisant le même moteur de décision (engine.ts, decideOffline).
   scanManualCode: async (code) => {
     const state = get();
     if (state.busy || state.verdict) return;
@@ -336,24 +340,50 @@ export const useScanStore = create<ScanState>((set, get) => ({
     const now = Date.now();
 
     if (state.degraded) {
-      const verdict: Verdict = {
-        kind: 'no',
-        code: 'SERVER_ERROR',
-        title: 'HORS LIGNE',
-        who: 'Code de secours indisponible',
-        detail: 'Le code de secours nécessite une connexion au serveur.',
-        reason: 'CONNEXION REQUISE',
-        degraded: true,
-        securityEvent: false,
-      };
-      feedback('no', state.haptics);
+      const ctx: ScanContext = { direction: state.direction, ttlExpired: state.ttlExpired, agentId, now };
+      const current = get();
+
+      let decision: ScanDecision;
+      if (current.ttlExpired) {
+        decision = decideManualCodeListExpired(ctx);
+      } else {
+        const hash = await computeManualCodeHash(code);
+        const visit = current.visits.find((v) => v.manualCodeHash && v.manualCodeHash === hash);
+        decision = visit ? decideOffline(visit, ctx) : decideManualCodeNotFound(ctx);
+
+        if (visit && Object.keys(decision.patch).length > 0) {
+          const patched = current.visits.map((v) =>
+            v.visitId === visit.visitId ? { ...v, ...decision.patch } : v,
+          );
+          set({ visits: patched });
+          void setItem(
+            OFFLINE_LIST_KEY,
+            JSON.stringify({ visits: patched, expiresAt: current.offlineListExpiresAt }),
+          );
+        }
+
+        if (visit && decision.verdict.kind !== 'no') {
+          const pending: PendingScan[] = [
+            ...current.pending,
+            {
+              signedQrPayload: '',
+              manualCode: code,
+              direction: current.direction,
+              agentId,
+              occurredAt: now,
+              offlineVerdict: decision.verdict.code,
+            },
+          ];
+          set({ pending });
+          void setItem(PENDING_SCANS_KEY, JSON.stringify(pending));
+        }
+      }
+
+      feedback(decision.verdict.kind, current.haptics);
       set((s) => ({
-        verdict,
+        verdict: decision.verdict,
         scansToday: s.scansToday + 1,
-        journal: [
-          { t: now, nom: 'Code de secours', agent: agentId, ok: false, det: 'Tentative hors ligne — connexion requise', deg: true, sec: false },
-          ...s.journal,
-        ],
+        journal: [decision.journal, ...s.journal],
       }));
       return;
     }
@@ -524,6 +554,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
               fenetreFin: shown?.fenetreFin,
               present: entry.isOnSite,
               overstayMinutes: shown?.overstayMinutes,
+              manualCodeHash: entry.manualCodeHash,
             };
           });
           expiresAt = response.expiresAt ?? now + 4 * 3_600_000;
@@ -646,6 +677,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
       agentId: p.agentId,
       scannedAtUtc: new Date(p.occurredAt).toISOString(),
       offlineVerdict: p.offlineVerdict,
+      manualCode: p.manualCode,
     }));
 
     const agentId = useAuthStore.getState().agent?.matricule;
