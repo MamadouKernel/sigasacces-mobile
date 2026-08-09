@@ -15,12 +15,14 @@ import { colors } from '@/theme/tokens';
 
 const HEALTH_INTERVAL_MS = 30_000;
 const DAY_LIST_INTERVAL_MS = 15 * 60_000;
+const PENDING_CONFIRMATION_POLL_MS = 5_000;
 
 export function ScannerScreen() {
   const verdict = useScanStore((s) => s.verdict);
   const scanPayload = useScanStore((s) => s.scanPayload);
   const checkConnectivity = useScanStore((s) => s.checkConnectivity);
   const refreshDayList = useScanStore((s) => s.refreshDayList);
+  const pendingConfirmationCount = useScanStore((s) => s.pendingConfirmations.size);
   const [listOpen, setListOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
 
@@ -39,6 +41,21 @@ export function ScannerScreen() {
     const timer = setInterval(() => void refreshDayList(), DAY_LIST_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [refreshDayList]);
+
+  // Sondage RAPIDE pendant qu'au moins une demande de confirmation est en
+  // attente : l'agent et le visiteur attendent physiquement à la porte, un
+  // délai de 15 min (ci-dessus) serait perçu comme un système en panne. Le
+  // push de résolution (voir pushToken.ts, ConfirmationNotifier côté API)
+  // couvre déjà la plupart des cas, mais dépend de la permission
+  // notifications ET d'un jeton Expo valide enregistré — silencieusement
+  // absent sinon (best-effort). Ce filet garantit une mise à jour en
+  // quelques secondes même sans push, et s'arrête de lui-même dès qu'il n'y
+  // a plus de demande en attente (pas de sondage inutile en continu).
+  useEffect(() => {
+    if (pendingConfirmationCount === 0) return;
+    const timer = setInterval(() => void refreshDayList(), PENDING_CONFIRMATION_POLL_MS);
+    return () => clearInterval(timer);
+  }, [pendingConfirmationCount, refreshDayList]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
