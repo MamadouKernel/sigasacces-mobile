@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAuthStore } from '@/features/auth/auth.store';
 import { AppHeader } from '@/features/scan/components/AppHeader';
 import { DayListSheet } from '@/features/scan/components/DayListSheet';
 import { DegradedBanner } from '@/features/scan/components/DegradedBanner';
@@ -11,6 +12,7 @@ import { TopStatusRow } from '@/features/scan/components/TopStatusRow';
 import { VerdictOverlay } from '@/features/scan/components/VerdictOverlay';
 import { Viewfinder } from '@/features/scan/components/Viewfinder';
 import { useScanStore } from '@/features/scan/scan.store';
+import { connectRealtime, disconnectRealtime } from '@/lib/realtime';
 import { colors } from '@/theme/tokens';
 
 const HEALTH_INTERVAL_MS = 30_000;
@@ -23,6 +25,7 @@ export function ScannerScreen() {
   const checkConnectivity = useScanStore((s) => s.checkConnectivity);
   const refreshDayList = useScanStore((s) => s.refreshDayList);
   const pendingConfirmationCount = useScanStore((s) => s.pendingConfirmations.size);
+  const siteId = useAuthStore((s) => s.post?.siteId);
   const [listOpen, setListOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
 
@@ -56,6 +59,38 @@ export function ScannerScreen() {
     const timer = setInterval(() => void refreshDayList(), PENDING_CONFIRMATION_POLL_MS);
     return () => clearInterval(timer);
   }, [pendingConfirmationCount, refreshDayList]);
+
+  // Temps réel (SignalR, /hubs/scan-events) : complète les sondages ci-dessus
+  // sans les remplacer — voir lib/realtime.ts. Sur mobile, une connexion
+  // persistante ne survit pas fiablement à une mise en arrière-plan (le
+  // runtime JS est suspendu par l'OS, la socket peut mourir en silence sans
+  // déclencher onclose) : plutôt que de faire confiance à la reconnexion
+  // automatique de SignalR dans ce cas précis, on ferme explicitement en
+  // arrière-plan et on reconnecte à froid au retour au premier plan — moins
+  // fragile qu'une reconnexion sur un état incertain.
+  useEffect(() => {
+    if (!siteId) {
+      disconnectRealtime();
+      return;
+    }
+
+    const onSignal = () => void refreshDayList();
+    connectRealtime(siteId, onSignal);
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        connectRealtime(siteId, onSignal);
+        void refreshDayList(); // rattrape ce qui a pu être manqué pendant la coupure
+      } else {
+        disconnectRealtime();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      disconnectRealtime();
+    };
+  }, [siteId, refreshDayList]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
