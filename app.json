@@ -9,13 +9,13 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/ios-icon.png",
-      "bundleIdentifier": "com.moasko2.sigasaccesagent",
+      "bundleIdentifier": "com.kernel0748.sigasaccesagent",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.moasko2.sigasaccesagent",
+      "package": "com.kernel0748.sigasaccesagent",
       "adaptiveIcon": {
         "backgroundColor": "#0E2A3A",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
